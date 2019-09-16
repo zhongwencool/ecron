@@ -1,14 +1,18 @@
 ecron
 =====
-ecron implements a cron spec parser and job runner.
+[![Build Status](https://travis-ci.org/zhongwencool/ecron.png?branch=master)](https://travis-ci.org/zhongwencool/ecron)
+[![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master)](https://coveralls.io/github/zhongwencool/ecron?branch=master)
+[![Hex.pm](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron)
 
-Static Usage 
+A lightweight/efficient cron-like job scheduling library for Erlang.
+
+Basic Usage 
 -----
 ```erlang
 %% sys.config
 [
    {ecron, [      
-      {time_type, local}, %% local or utc
+      {time_zone, local}, %% local or utc
       {jobs, [                
          %% {JobName, CrontabSpec, {M, F, A}}
          %% {JobName, CrontabSpec, {M, F, A}, StartDateTime, EndDateTime}
@@ -22,36 +26,81 @@ Static Usage
          {extend_crontab_job, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
          {alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
          {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
-         %% run every(0-23) o'clock between {{2019,9,15},{13,3,18}} and {{2020,9,15},{13,3,18}}.
+         %% Runs 0-23 o'clock between {{2019,9,15},{13,3,18}} and {{2020,9,15},{13,3,18}}.
          {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,15},{13,3,18}}, {{2020,9,15},{13,3,18}}}            
-     ]}        
+     ]}
 ]
 ```
 
-* When `time_type` is `local`, current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
-* When `time_type` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0). 
+* When `time_zone` is `local`, current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
+* When `time_zone` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0).
+* It handles not very radical when the system clock is altered, all workers only adjust system time by `{adjusting_time_second, 604800}`.  
+  Another way to take effect immediately is by running `ecron:reload/0` manually. 
 
 Runtime Usage 
 -----
 ```erlang
 Spec = #{second => [0], 
        minute => '*',   
-       hour => [{0,12}, 18],
+       hour => [{0,5}, 18], %% same as [0,1,2,3,4,5,18]
        month => '*',
        day_of_month => '*',
        day_of_week => [{0,5}]},
-CronMFA = {io, format, ["Runs on 0-12,18 o'clock between Sunday and Firday.~n"]},
+CronMFA = {io, format, ["Runs on 0-5,18 o'clock between Sunday and Firday.~n"]},
 %% crontab 
 {ok, CronPid} = ecron:add(crontabUniqueName, Spec, CronMFA), 
-ok = ecron:deactivate(crontabUniqueName),
-ok = ecron:activate(crontabUniqueName),
-Statistic = ecron:statistic(crontabUniqueName),
 ok = ecron:delete(crontabuniqueName),
-%% fixed interval Run every 120 second
+%% Runs every 120 second (fixed interval)
 EveryMFA = {io, format, ["Runs every 120 second.~n"]},
 {ok, EveryPid} = ecron:add(everyUniqueName, 120, EveryMFA),
 ```
+Debug Support
+------
+````erlang
+1> ecron:deactivate(CrontabName).
+ok
 
+2> ecron:activate(CrontabName).
+ok
+
+3> ecron:statistic(CrontabName).
+{ok, 
+#{ecron =>
+      #{crontab =>
+            #{day_of_month => '*',day_of_week => '*',hour => '*',
+              minute => [0,15,30,45],
+              month => '*',
+              second => [0]},
+        end_time => unlimited,
+        mfa => {io,format,["Runs on 0, 15, 30, 45 minutes~n"]},
+        name => crontab_job,start_time => unlimited,type => cron},
+  failed => 0,
+  next =>
+      ["2019-09-16T09:30:00+08:00","2019-09-16T09:45:00+08:00",
+       "2019-09-16T10:00:00+08:00","2019-09-16T10:15:00+08:00",
+       [...]|...],
+  ok => 2,
+  results => [ok, ok],
+  run_microsecond => [86,80],status => waiting,time_type => local,
+  worker => <0.176.0>}
+}
+
+4> ecron:parse_spec("0 0 1,13 * * 1-5", 5).
+{ok,
+#{crontab =>
+      #{day_of_month => '*',
+        day_of_week => [{1,5}],
+        hour => [1,13],
+        minute => [0],
+        month => '*',
+        second => [0]},
+  next =>
+      ["2019-09-16T13:00:00+08:00","2019-09-17T01:00:00+08:00",
+       "2019-09-17T13:00:00+08:00","2019-09-18T01:00:00+08:00",
+       "2019-09-18T13:00:00+08:00"],
+  type => cron}
+}
+````
 CRON Expression Format
 -----
 A cron expression represents a set of times, using 5-6 space-separated fields.
@@ -112,12 +161,12 @@ Note: The interval takes the job runtime into account.
 For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, it will have 5 minutes of idle time between each run.
   
 Implementation
------ 
-{adjusting_time_millisecond, 604800000}, %7*24*3600*1000
+-----
+
 
 Proper Test
 -----
 
 ```shell
-  $ rebar3 proper
+  $ rebar3 do proper -c, cover -v
 ```

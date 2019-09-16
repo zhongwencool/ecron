@@ -1,80 +1,13 @@
 -module(prop_ecron_helper).
 
 -include_lib("proper/include/proper.hrl").
--export([spec/0, extend_spec/0, integer_spec/2]).
--export([maybe_error_spec/0]).
 -export([spec_to_str/1, cron_spec_to_map/1]).
 -export([unzip/1]).
 -export([check_day_of_month/1]).
 -export([field_to_extend/1]).
--export([get_max_day_of_months/1]).
 -export([to_now_datetime/2]).
-
-spec() ->
-    [
-        integer_spec(0, 59),
-        integer_spec(0, 23),
-        integer_spec(1, 31),
-        oneof([integer_spec(1, 12), alphabet_spec(month, 1, 12)]),
-        oneof([integer_spec(0, 6), alphabet_spec(day_of_week, 0, 6)])
-    ].
-extend_spec() ->
-    [
-        integer_spec(0, 59),
-        integer_spec(0, 59),
-        integer_spec(0, 23),
-        integer_spec(1, 31),
-        oneof([integer_spec(1, 12), alphabet_spec(month, 1, 12)]),
-        oneof([integer_spec(0, 6), alphabet_spec(day_of_week, 0, 6)])
-    ].
-
-maybe_error_spec() ->
-    [
-        error_integer_spec(0, 100), %% second
-        error_integer_spec(50, 80), %% minute
-        error_integer_spec(20, 30), %% hour
-        error_integer_spec(20, 40), %% day_of_month
-        error_integer_spec(10, 20), %% month
-        error_integer_spec(5, 10)  %% day_of_week
-    ].
-
-integer_spec(Min, Max) ->
-    frequency([
-        {1, "*"}, %% "*"
-        {1, {'*/Step', general, Min, Max, range(1, 100)}}, %% "*/Step"
-        {8, ?SIZED(S, integer_spec(S, Min, Max))}]).
-
-integer_spec(S, Min, Max) ->
-    oneof([
-        {'Integer', general, range(Min, Max)}, %% 1
-        'Min-Max'(general, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 100)), %% 1-5/2
-        {'Min/Step', general, range(Min, Max), Max, range(1, 100)}, %% 10/2
-        ?LAZY({list, general, [integer_spec(S - 1, Min, Max), integer_spec(S - 2, Min, Max)]}) %% 1,2-6/2...
-    ]).
-
-error_integer_spec(Min, Max) ->
-        ?SIZED(S, error_integer_spec(S, Min, Max)).
-
-error_integer_spec(S, Min, Max) ->
-    oneof([
-        {'Integer', general, range(Min, Max)}, %% 1
-        'Min-Max'(general, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 100)), %% 1-5/2
-        ?LAZY({list, general, [error_integer_spec(S - 1, Min, Max), error_integer_spec(S - 2, Min, Max)]}) %% 1,2-6/2...
-    ]).
-
-alphabet_spec(Type, Min, Max) ->
-    ?SIZED(S, alphabet_cron_spec(S, Type, Min, Max)).
-
-alphabet_cron_spec(S, Type, Min, Max) ->
-    oneof([
-        {'Integer', Type, range(Min, Max)}, %% 1
-        'Min-Max'(Type, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(Type, range(Min, Max), Max, range(1, 100)), %% 1-5/2
-        {'Min/Step', Type, range(Min, Max), Max, range(1, 100)}, %% 10/2
-        ?LAZY({list, Type, [alphabet_cron_spec(S - 1, Type, Min, Max), alphabet_cron_spec(S - 2, Type, Min, Max)]}) %% 1,2-6/2...
-    ]).
+-export([field_spec_to_str/1]).
+-export([max_day_of_month/1]).
 
 spec_to_str(Spec) ->
     Format = string:join(lists:duplicate(length(Spec), "~s"), " "),
@@ -100,6 +33,7 @@ field_spec_to_str({'Min-Max/Step', Type, Min, Max, Step}) ->
     int_to_str(Type, Min) ++ "-" ++ int_to_str(Type, Max) ++ "/" ++ integer_to_list(Step);
 field_spec_to_str({list, _Type, List}) -> string:join(lists:map(fun field_spec_to_str/1, List), ",").
 
+unzip(undefined) -> [];
 unzip(List) -> lists:usort(unzip_list(List, [])).
 unzip_list([], Acc) -> Acc;
 unzip_list([H | T], Acc) when is_integer(H) -> unzip_list(T, [H | Acc]);
@@ -121,9 +55,6 @@ field_to_extend({'Min/Step', _Type, Min, MaxLimit, Step}) -> ecron:zip(lists:seq
 field_to_extend({'Min-Max/Step', _Type, Min, Max, Step}) -> ecron:zip(lists:seq(Min, Max, Step));
 field_to_extend({list, _Type, List}) -> ecron:zip(unzip(lists:flatten([field_to_extend(L) || L <- List]))).
 
-get_max_day_of_months(List) ->
-    lists:max(lists:map(fun max_day_of_month/1, List)).
-
 to_now_datetime(_, unlimited) -> unlimited;
 to_now_datetime(utc, Time) -> calendar:system_time_to_universal_time(calendar:rfc3339_to_system_time(Time), second);
 to_now_datetime(local, Time) -> calendar:system_time_to_local_time(calendar:rfc3339_to_system_time(Time), second).
@@ -131,10 +62,6 @@ to_now_datetime(local, Time) -> calendar:system_time_to_local_time(calendar:rfc3
 %%%%%%%%%%%%%%%%%
 %%% Internal  %%%
 %%%%%%%%%%%%%%%%%
-'Min-Max'(Type, Min, MaxLimit) ->
-    ?LET({MinF, MaxLimitF}, {Min, MaxLimit}, {'Min-Max', Type, MinF, range(MinF, MaxLimitF)}).
-'Min-Max/Step'(Type, Min, MaxLimit, Step) ->
-    ?LET({MinF, MaxLimitF, StepF}, {Min, MaxLimit, Step}, {'Min-Max/Step', Type, MinF, range(MinF, MaxLimitF), StepF}).
 
 int_to_str(day_of_week, 0) -> "sun";
 int_to_str(day_of_week, 1) -> "mon";

@@ -1,11 +1,11 @@
 -module(ecron).
 
--export([add/5, add/3, add/1]).
+-export([add/5, add/3]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
 -export([reload/0]).
--export([predict_datetime/1, predict_datetime/2]).
+-export([parse_spec/2]).
 
 -define(MAX_TIMEOUT, 4294967). %% (16#ffffffff div 1000) 49.71 days.
 
@@ -21,8 +21,8 @@ day_of_week => '*' | [0..6 | {0..5, 1..6}, ...]}.
 
 -type ecron() :: #{name => name(),
 crontab => crontab(),
-start_time => calendar:datetime() | unlimited,
-end_time => calendar:datetime() | unlimited,
+start_time => calendar:rfc3339_string() | unlimited,
+end_time => calendar:rfc3339_string() | unlimited,
 mfa => mfa(),
 type => cron | every}.
 
@@ -34,11 +34,11 @@ failed => non_neg_integer(),
 ok => non_neg_integer(),
 results => [term()],
 run_microsecond => [pos_integer()],
-time_type => local | utc,
+time_zone => local | utc,
 worker => pid(),
 next => [calendar:datetime()]}.
 
--type parse_error() :: invaild_time | invaild_spec | year | month | day_of_month | day_of_week | hour | minute | second.
+-type parse_error() :: invaild_time | invaild_spec | month | day_of_month | day_of_week | hour | minute | second.
 -type start_datetime() :: unlimited | calendar:datetime().
 -type end_datetime() :: unlimited | calendar:datetime().
 
@@ -54,25 +54,15 @@ add(Name, Spec, MFA, Start, End) ->
         true ->
             case parse_spec(Spec) of
                 {ok, Type, Crontab} ->
-                    add(#{type => Type, name => Name,
+                    ecron_sup:add(#{
+                        type => Type, name => Name,
                         crontab => Crontab, mfa => MFA,
-                        start_time => Start, end_time => End});
+                        start_time => Start, end_time => End
+                    });
                 ErrParse -> ErrParse
             end;
         false -> {error, invaild_time, {Start, End}}
     end.
-
--spec predict_datetime(crontab_spec()) -> [calendar:datetime()].
-predict_datetime(Spec) -> predict_datetime(Spec, 30).
-
--spec predict_datetime(crontab_spec(), pos_integer()) -> [calendar:datetime()].
-predict_datetime({ok, Type, Job}, Num) -> ecron_job:predict_datetime(Type, Job, Num);
-predict_datetime({error, _Field, _Value} = Error, _Num) -> Error;
-predict_datetime(Spec, Num) when is_integer(Num) andalso Num > 0 ->
-    predict_datetime(parse_spec(Spec), Num).
-
--spec add(crontab()) -> {ok, pid()} | {error, already_exist}.
-add(JobSpec) -> ecron_sup:add(JobSpec).
 
 -spec delete(name()) -> ok | {error, not_found}.
 delete(JobName) -> execute(delete, find(JobName)).
@@ -83,13 +73,13 @@ deactivate(JobName) -> execute(deactivate, find(JobName)).
 -spec activate(name()) -> ok | {error, not_found}.
 activate(JobName) -> execute(activate, find(JobName)).
 
--spec statistic(name()) -> statistic() | {error, not_found}.
+-spec statistic(name()) -> {ok, statistic()} | {error, not_found}.
 statistic(JobName) -> execute(statistic, find(JobName)).
 
 -spec statistic() -> [statistic()].
 statistic() ->
     lists:map(fun({_, Pid}) ->
-        ecron_job:statistic(Pid) end,
+        element(2, ecron_job:statistic(Pid)) end,
         ets:tab2list(ecron)).
 
 -spec reload() -> ok.
@@ -97,6 +87,16 @@ reload() ->
     lists:foreach(fun({_, Pid}) ->
         ecron_job:activate(Pid)
                   end, ets:tab2list(ecron)).
+
+-spec parse_spec(crontab_spec(), pos_integer()) ->
+    {ok, #{type => cron | every, crontab => crontab_spec(), next => [calendar:rfc3339_string()]}} |
+    {error, atom(), term()}.
+parse_spec({ok, Type, Job}, Num) ->
+    Next = ecron_job:predict_datetime(Type, Job, Num),
+    {ok, #{type => Type, crontab => Job, next => Next}};
+parse_spec({error, _Field, _Value} = Error, _Num) -> Error;
+parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
+    parse_spec(parse_spec(Spec), Num).
 
 %%%===================================================================
 %%% Internal functions
@@ -157,7 +157,7 @@ parse_spec(Spec) when is_map(Spec) ->
     end;
 parse_spec(Second) when is_integer(Second) andalso Second =< ?MAX_TIMEOUT ->
     {ok, every, Second * 1000};
-parse_spec(Spec)  -> {error, invaild_spec, Spec}.
+parse_spec(Spec) -> {error, invaild_spec, Spec}.
 
 parse_cron_spec([Second, Minute, Hour, DayOfMonth, Month, DayOfWeek]) ->
     case parse_field(Month, 1, 12) of
@@ -221,7 +221,7 @@ parse_field([Field | Fields], MinL, MaxL, Acc) ->
                             [MaxStr, StepStr] -> {field_to_int(MaxStr), field_to_int(StepStr)};
                             _ -> {-1, -1} %% error
                         end,
-                    case Max >= MinL andalso Max >= Min of
+                    case Max >= MinL andalso Max >= Min andalso Step > 0 of
                         true ->
                             New = lists:seq(Min, Max, Step),
                             case lists:max(New) =< MaxL of
@@ -301,12 +301,7 @@ get_max_day_of_months(List) -> max_day_of_months(List, 29).
 
 max_day_of_months([], Max) -> Max;
 max_day_of_months(_, 31) -> 31;
-max_day_of_months([{Month, Month} | List], Max) ->
-    NewMax = erlang:max(Max, last_day_of_month(Month)),
-    max_day_of_months(List, NewMax);
-max_day_of_months([{MonthMin, MonthMax} | List], Max) ->
-    NewMax = erlang:max(Max, last_day_of_month(MonthMin)),
-    max_day_of_months([{MonthMin + 1, MonthMax} | List], NewMax);
+max_day_of_months([{_Min, _Max} | _List], _OldMax) -> 31; %% because Max - Min >= 2
 max_day_of_months([Int | List], Max) ->
     NewMax = erlang:max(Max, last_day_of_month(Int)),
     max_day_of_months(List, NewMax).
