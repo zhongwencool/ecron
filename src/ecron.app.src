@@ -1,5 +1,5 @@
 {application, ecron,
-    [{description, "Crontab Manager"},
+    [{description, "cron-like job scheduling library"},
         {vsn, "0.1.0"},
         {registered, [ecron_sup]},
         {mod, {ecron_app, []}},
@@ -26,5 +26,5 @@
         ]},
         {modules, []},
         {licenses, ["Apache 2.0"]},
-        {links, []}
+        {links, [{"Github", "https://github.com/zhongwencool/ecron"}]}
     ]}.

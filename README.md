@@ -6,6 +6,12 @@ ecron
 
 A lightweight/efficient cron-like job scheduling library for Erlang.
 
+Ecron does not poll the system on a minute-by-minute basis like cron does. 
+Each job is assigned to a single process. 
+The time until it is to run next is calculated, and the process sleeps for exactly that long.
+
+This implementation prevents a lot of messages from flying around.
+
 It offers:
 
 * Both cron-like scheduling and interval-based scheduling.
