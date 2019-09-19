@@ -162,6 +162,7 @@ prop_map_error_spec() ->
                     no_change -> Expect;
                     invaild_time -> Expect;
                     invaild_spec -> Expect;
+                    second -> maps:put(Extra, [0], Expect);
                     _ -> maps:put(Extra, '*', Expect)
                 end,
             case ecron:parse_spec(SpecMap) of

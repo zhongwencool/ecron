@@ -340,6 +340,7 @@ format_map_spec([{Key, Min, Max} | List], Old, New) ->
 
 take(Key, Spec) ->
     case maps:take(Key, Spec) of
+        error when Key =:= second -> {[0], Spec};
         error -> {'*', Spec};
         Res -> Res
     end.

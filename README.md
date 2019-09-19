@@ -6,6 +6,15 @@ ecron
 
 A lightweight/efficient cron-like job scheduling library for Erlang.
 
+It offers:
+
+* Both cron-like scheduling and interval-based scheduling.
+* Well tested by `PropTest` ![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master).
+* Use `receive after` at any given time (rather than reevaluating upcoming jobs every second/minute).
+* Minimal overhead. ecron aims to keep its code base small.
+
+Ecron is very simple and small, but it's designed to be so, keeping lightweight and fully customizable.
+
 Basic Usage 
 -----
 ```erlang
@@ -37,7 +46,7 @@ Basic Usage
 * It handles not very radical when the system clock is altered, all workers only adjust system time by `{adjusting_time_second, 604800}`.  
   Another way to take effect immediately is by running `ecron:reload/0` manually. 
 
-Runtime Usage 
+Advanced Usage 
 -----
 ```erlang
 Spec = #{second => [0], 
@@ -47,15 +56,21 @@ Spec = #{second => [0],
        day_of_month => '*',
        day_of_week => [{0,5}]},
 CronMFA = {io, format, ["Runs on 0-5,18 o'clock between Sunday and Firday.~n"]},
-%% crontab 
-{ok, CronPid} = ecron:add(crontabUniqueName, Spec, CronMFA), 
+%% crontab  
+{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA), 
+ok = ecron:delete(crontabuniqueName),
+%% crontab with startTime and endTime
+StartDateTime = {{2019,9,19},{0,0,0}},
+EndDateTime = {{2020,9,19},{0,0,0}},
+{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA, StartDateTime, EndDateTime), 
 ok = ecron:delete(crontabuniqueName),
 %% Runs every 120 second (fixed interval)
 EveryMFA = {io, format, ["Runs every 120 second.~n"]},
-{ok, EveryPid} = ecron:add(everyUniqueName, 120, EveryMFA),
+{ok, _} = ecron:add(everyUniqueName, 120, EveryMFA),
 ```
 Debug Support
 ------
+There are some function to get information for a Job and to handle the Job and Invocations.
 ````erlang
 1> ecron:deactivate(CrontabName).
 ok
@@ -101,9 +116,24 @@ ok
   type => cron}
 }
 ````
+
 CRON Expression Format
 -----
 A cron expression represents a set of times, using 5-6 space-separated fields.
+Currently, W (nearest weekday), L (last day of month/week), and # (nth weekday of the month) are not supported. 
+
+Most other features supported by popular cron implementations should work just fine.
+```shell script
+ # ┌────────────── second (optional)
+ # │ ┌──────────── minute
+ # │ │ ┌────────── hour
+ # │ │ │ ┌──────── day of month
+ # │ │ │ │ ┌────── month
+ # │ │ │ │ │ ┌──── day of week
+ # │ │ │ │ │ │
+ # │ │ │ │ │ │
+ # * * * * * *
+```
 
 Field name   | Mandatory? | Allowed values  | Allowed special characters
 ----------   | ---------- | --------------  | --------------------------
@@ -115,6 +145,9 @@ Month        | Yes        | 1-12 or JAN-DEC | * / , -
 Day of week  | Yes        | 0-6 or SUN-SAT  | * / , -
 
 Note: Month and Day-of-week field values are case insensitive. "SUN", "Sun", and "sun" are equally accepted.
+
+When specifying your cron values you'll need to make sure that your values fall within the ranges. 
+For instance, some cron's use a 0-7 range for the day of week where both 0 and 7 represent Sunday. We do not.
 
 ### Special Characters
 #### Asterisk ( * )
@@ -148,6 +181,11 @@ Entry                  | Description                                | Equivalent
 @daily (or @midnight)  | Run once a day, midnight                   | 0 0 0 * * *
 @hourly                | Run once an hour, beginning of hour        | 0 0 * * * *
 
+>There are tools that help when constructing your cronjobs. 
+>You might find something like [https://crontab.guru/](https://crontab.guru/) or [https://cronjob.xyz/](https://cronjob.xyz/) helpful. 
+>But, note that these don't necessarily accept the exact same syntax as this library, 
+>for instance, it doesn't accept the seconds field, so keep that in mind.
+
 Intervals
 -----
 You may also schedule a job to execute at fixed intervals, starting at the time it's added or cron is run. 
@@ -157,12 +195,13 @@ This is supported by formatting the cron spec like this:
 ```
 For example, "@every 1h30m10s" would indicate a schedule that activates after 1 hour, 30 minutes, 10 seconds, and then every interval after that.
 
-Note: The interval takes the job runtime into account. 
-For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, it will have 5 minutes of idle time between each run.
+>Note: The interval takes the job runtime into account. 
+>For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
+>it will have 5 minutes of idle time between each run.
   
 Implementation
 -----
-
+TODO
 
 Proper Test
 -----
@@ -170,3 +209,10 @@ Proper Test
 ```shell
   $ rebar3 do proper -c, cover -v
 ```
+
+TODO
+----
+* support the last day of a month.
+* support auto-remove job after end_datetime.
+* Maybe persistent jobs?????.
+
