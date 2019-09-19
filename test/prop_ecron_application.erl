@@ -38,7 +38,7 @@ prop_application() ->
     ).
 
 prop_application_error_config(doc) -> "ecron application load error config failed";
-prop_application_error_config(opts) -> [{numtests, 100}].
+prop_application_error_config(opts) -> [{numtests, 800}].
 prop_application_error_config() ->
     ?FORALL({Spec, UseTime}, {maybe_error_spec(), range(0, 3)},
         begin
@@ -57,6 +57,7 @@ prop_application_error_config() ->
                 case application:start(ecron) of
                     {error, {"invaild_time: {{2019,12,10},unlimited}", _}} -> true;
                     {error, {"invaild_spec: test", _}} -> true;
+                    {error, {{test, error_format}, _}} -> true;
                     {error, {Actual, _}} ->
                         {error, Field, Reason} = ecron:parse_spec(SpecStr),
                         Expect = lists:flatten(io_lib:format("~p: ~p", [Field, Reason])),
