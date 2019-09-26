@@ -135,6 +135,7 @@ prop_restart_server(opts) -> [{numtests, 10}].
 prop_restart_server() ->
     ?FORALL(Name, term(),
         begin
+            error_logger:tty(false),
             application:set_env(ecron, jobs, []),
             application:ensure_all_started(ecron),
             {ok, Name} = ecron:add(Name, "@yearly", {io, format, ["Yearly~n"]}),
@@ -145,6 +146,7 @@ prop_restart_server() ->
             NewPid = erlang:whereis(?Ecron),
             Res2 = ecron:statistic(Name),
             ok = ecron:delete(Name),
+            error_logger:tty(true),
             Pid =/= NewPid andalso
                 element(1, Res1) =:= ok andalso
                 element(1, Res2) =:= ok
