@@ -1,13 +1,12 @@
 -module(ecron).
+-include("ecron.hrl").
 
--export([add/5, add/3]).
+-export([add/6, add/5, add/3]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
--export([reload/0]).
--export([parse_spec/2]).
-
--define(MAX_TIMEOUT, 4294967). %% (16#ffffffff div 1000) 49.71 days.
+-export([parse_spec/2, parse_spec/1]).
+-export([valid_datetime/2]).
 
 -type name() :: term().
 -type crontab_spec() :: crontab() | string() | binary() | 1..?MAX_TIMEOUT.
@@ -43,57 +42,54 @@ next => [calendar:datetime()]}.
 -type end_datetime() :: unlimited | calendar:datetime().
 
 -spec add(name(), crontab_spec(), mfa()) ->
-    {ok, pid()} | {error, parse_error(), term()} | {error, already_exist}.
-add(Name, Spec, MFA) ->
-    add(Name, Spec, MFA, unlimited, unlimited).
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+add(JobName, Spec, MFA) ->
+    add(JobName, Spec, MFA, unlimited, unlimited, [{singleton, true}]).
 
 -spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
-    {ok, pid()} | {error, parse_error(), term()} | {error, already_exist}.
-add(Name, Spec, MFA, Start, End) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+add(JobName, Spec, MFA, Start, End) ->
+    add(JobName, Spec, MFA, Start, End, [{singleton, true}]).
+
+-spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime(), proplists:proplists()) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+add(JobName, Spec, MFA, Start, End, Option) ->
     case valid_datetime(Start, End) of
         true ->
             case parse_spec(Spec) of
                 {ok, Type, Crontab} ->
-                    ecron_sup:add(#{
-                        type => Type, name => Name,
+                    ecron_tick:add(#{
+                        type => Type, name => JobName,
                         crontab => Crontab, mfa => MFA,
                         start_time => Start, end_time => End
-                    });
+                    }, Option);
                 ErrParse -> ErrParse
             end;
         false -> {error, invaild_time, {Start, End}}
     end.
 
--spec delete(name()) -> ok | {error, not_found}.
-delete(JobName) -> execute(delete, find(JobName)).
+-spec delete(name()) -> ok.
+delete(JobName) -> ecron_tick:delete(JobName).
 
 -spec deactivate(name()) -> ok | {error, not_found}.
-deactivate(JobName) -> execute(deactivate, find(JobName)).
+deactivate(JobName) -> ecron_tick:deactivate(JobName).
 
--spec activate(name()) -> ok | {error, not_found}.
-activate(JobName) -> execute(activate, find(JobName)).
+-spec activate(name()) -> ok | {error, already_ended | not_found}.
+activate(JobName) -> ecron_tick:activate(JobName).
 
 -spec statistic(name()) -> {ok, statistic()} | {error, not_found}.
-statistic(JobName) -> execute(statistic, find(JobName)).
+statistic(JobName) -> ecron_tick:statistic(JobName).
 
 -spec statistic() -> [statistic()].
-statistic() ->
-    lists:map(fun({_, Pid}) ->
-        element(2, ecron_job:statistic(Pid)) end,
-        ets:tab2list(ecron)).
-
--spec reload() -> ok.
-reload() ->
-    lists:foreach(fun({_, Pid}) ->
-        ecron_job:activate(Pid)
-                  end, ets:tab2list(ecron)).
+statistic() -> ecron_tick:statistic().
 
 -spec parse_spec(crontab_spec(), pos_integer()) ->
     {ok, #{type => cron | every, crontab => crontab_spec(), next => [calendar:rfc3339_string()]}} |
     {error, atom(), term()}.
-parse_spec({ok, Type, Job}, Num) ->
-    Next = ecron_job:predict_datetime(Type, Job, Num),
-    {ok, #{type => Type, crontab => Job, next => Next}};
+parse_spec({ok, Type, JobSpec}, Num) ->
+    Job = #{type => Type, crontab => JobSpec},
+    Next = ecron_tick:predict_datetime(Job, Num),
+    {ok, Job#{next => Next}};
 parse_spec({error, _Field, _Value} = Error, _Num) -> Error;
 parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
     parse_spec(parse_spec(Spec), Num).
@@ -101,17 +97,6 @@ parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-find(JobName) ->
-    case ets:lookup(ecron, JobName) of
-        [] -> {error, not_found};
-        [{_, Pid}] -> {ok, Pid}
-    end.
-
-execute(delete, {ok, Pid}) -> ecron_job:stop(Pid);
-execute(deactivate, {ok, Pid}) -> ecron_job:deactivate(Pid);
-execute(activate, {ok, Pid}) -> ecron_job:activate(Pid);
-execute(statistic, {ok, Pid}) -> ecron_job:statistic(Pid);
-execute(_Type, Error) -> Error.
 
 valid_datetime(Start, End) ->
     case valid_datetime(Start) andalso valid_datetime(End) of
@@ -156,7 +141,7 @@ parse_spec(Spec) when is_map(Spec) ->
         error -> {error, month, Months}
     end;
 parse_spec(Second) when is_integer(Second) andalso Second =< ?MAX_TIMEOUT ->
-    {ok, every, Second * 1000};
+    {ok, every, Second};
 parse_spec(Spec) -> {error, invaild_spec, Spec}.
 
 parse_cron_spec([Second, Minute, Hour, DayOfMonth, Month, DayOfWeek]) ->
@@ -267,7 +252,7 @@ parse_every_spec(SecSpec) ->
     LowerSecSpec = string:lowercase(SecSpec),
     List = [{"d", 24 * 3600}, {"h", 3600}, {"m", 60}, {"s", 1}],
     case parse_every(List, LowerSecSpec, 0) of
-        {ok, Sec} when Sec > 0 andalso Sec =< ?MAX_TIMEOUT -> {ok, every, Sec * 1000};
+        {ok, Sec} when Sec > 0 andalso Sec =< ?MAX_TIMEOUT -> {ok, every, Sec};
         {ok, Sec} -> {error, second, Sec};
         error -> {error, second, SecSpec}
     end.

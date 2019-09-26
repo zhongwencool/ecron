@@ -219,6 +219,9 @@ Proper Test
 TODO
 ----
 * support the last day of a month.
-* support auto-remove job after end_datetime.
+* support `global` start
 * Maybe persistent jobs?????.
 
+DONE
+-----
+* support auto-remove job after end_datetime.

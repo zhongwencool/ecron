@@ -16,12 +16,12 @@
                 %%  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly
                 %%  4. @every 1h2m3s
                 %%{alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},
-                %%{crontab_job, "*/15 * * * *", {io, format, ["Runs on 0, 15, 30, 45 minutes~n"]}}
+                {crontab_job, "0 0 0 * * *", {io, format, ["Runs on 0, 15, 30, 45 minutes~n"]}}
                 %%{extend_crontab_job, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,5,18 o'clock:~n"]}},
-                %%{fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}}
+                %%{fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes~n"]}}
                 
                 %%  run every(0-23) o'clock between {{2019,9,15},{13,3,18}} and {{2020,9,15},{13,3,18}}.
-                %% {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,15},{13,3,18}}, {{2020,9,15},{13,3,18}}}
+                %% {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,10,20},{13,3,18}}, {{2020,9,15},{13,3,18}}}
             ]}
         ]},
         {modules, []},
