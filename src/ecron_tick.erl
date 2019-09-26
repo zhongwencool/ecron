@@ -6,7 +6,7 @@
 -export([statistic/1, statistic/0]).
 -export([predict_datetime/2]).
 
--export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2, terminate/2]).
+-export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
 -export([spawn_mfa/2]).
 
 -record(state, {time_zone, max_timeout}).
@@ -93,9 +93,6 @@ handle_info(_Unknown, State) ->
 handle_cast(_Unknown, State) ->
     {noreply, State, next_timeout(State)}.
 
-terminate(_Reason, _State) ->
-    ok.
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -116,7 +113,10 @@ reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs]) ->
 reload_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs]) ->
     case parse_job(Name, Spec, MFA, unlimited, unlimited) of
         {ok, Job} ->
-            ets:insert_new(?Job, Job),
+            case ets:lookup(?Job, Name) of
+                [] -> ets:insert(?Job, Job);
+                _ -> ok
+            end,
             reload_crontab(Jobs);
         {error, Field, Reason} -> {stop, lists:flatten(io_lib:format("~p: ~p", [Field, Reason]))}
     end;

@@ -136,7 +136,10 @@ prop_restart_server() ->
     ?FORALL(Name, term(),
         begin
             error_logger:tty(false),
-            application:set_env(ecron, jobs, []),
+            application:set_env(ecron, jobs, [
+                {ecron_test_1, "@yearly", {io, format, ["Yearly~n"]}},
+                {ecron_test_2, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited}
+            ]),
             application:ensure_all_started(ecron),
             {ok, Name} = ecron:add(Name, "@yearly", {io, format, ["Yearly~n"]}),
             Res1 = ecron:statistic(Name),
