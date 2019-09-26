@@ -7,19 +7,20 @@ ecron
 A lightweight/efficient cron-like job scheduling library for Erlang.
 
 Ecron does not poll the system on a minute-by-minute basis like cron does. 
-Each job is assigned to a single process. 
-The time until it is to run next is calculated, and the process sleeps for exactly that long.
+All jobs is assigned to a single process, just run as same as the [timer](http://erlang.org/doc/man/timer.html).
 
-This implementation prevents a lot of messages from flying around.
+It organize the tasks to be run in a ordered_set ets with the next time to run as key. 
+This way, you only need one process that calculates the time to wait until the next task should be executed, 
+then spawn the process to execute that task. Saves lots of processes.
+ 
+This implementation also prevents a lot of messages from flying around.
 
 It offers:
 
 * Both cron-like scheduling and interval-based scheduling.
 * Well tested by `PropTest` ![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master).
-* Use `receive after` at any given time (rather than reevaluating upcoming jobs every second/minute).
+* Use gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 * Minimal overhead. ecron aims to keep its code base small.
-
-Ecron is very simple and small, but it's designed to be so, keeping lightweight and fully customizable.
 
 Basic Usage 
 -----
@@ -41,16 +42,17 @@ Basic Usage
          {extend_crontab_job, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
          {alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
          {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
-         %% Runs 0-23 o'clock between {{2019,9,15},{13,3,18}} and {{2020,9,15},{13,3,18}}.
-         {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,15},{13,3,18}}, {{2020,9,15},{13,3,18}}}            
+         %% Runs 0-23 o'clock since {{2019,9,26},{0,0,0}}.
+         {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited}            
      ]}
 ]
 ```
 
 * When `time_zone` is `local`, current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
 * When `time_zone` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0).
+* The job will be auto remove at the end of the time. 
 * It handles not very radical when the system clock is altered, all workers only adjust system time by `{adjusting_time_second, 604800}`.  
-  Another way to take effect immediately is by running `ecron:reload/0` manually. 
+  Another way to take effect immediately on all jobs is by running `ecron:activate(Name)` manually. 
 
 Advanced Usage 
 -----
@@ -85,25 +87,23 @@ ok
 ok
 
 3> ecron:statistic(CrontabName).
-{ok, 
-#{ecron =>
-      #{crontab =>
-            #{day_of_month => '*',day_of_week => '*',hour => '*',
-              minute => [0,15,30,45],
-              month => '*',
-              second => [0]},
-        end_time => unlimited,
-        mfa => {io,format,["Runs on 0, 15, 30, 45 minutes~n"]},
-        name => crontab_job,start_time => unlimited,type => cron},
-  failed => 0,
-  next =>
-      ["2019-09-16T09:30:00+08:00","2019-09-16T09:45:00+08:00",
-       "2019-09-16T10:00:00+08:00","2019-09-16T10:15:00+08:00",
-       [...]|...],
-  ok => 2,
-  results => [ok, ok],
-  run_microsecond => [86,80],status => waiting,time_type => local,
-  worker => <0.176.0>}
+{ok,
+  #{crontab =>
+      #{day_of_month => '*',
+       day_of_week => [{1,5}],hour => [1,13],
+       minute => [0],month => '*',second => [0]},
+       start_time => unlimited,end_time => unlimited,
+       failed => 0,mfa => {io,format,["ddd"]},
+       name => test,status => activate,type => cron,
+       ok => 0,results => [],run_microsecond => [],       
+       opts => [{singleton,true}],
+       next =>
+          ["2019-09-27T01:00:00+08:00","2019-09-27T13:00:00+08:00",
+           "2019-09-30T01:00:00+08:00","2019-09-30T13:00:00+08:00",
+           "2019-10-01T01:00:00+08:00","2019-10-01T13:00:00+08:00",
+           "2019-10-02T01:00:00+08:00","2019-10-02T13:00:00+08:00",
+           [...]|...]      
+      }
 }
 
 4> ecron:parse_spec("0 0 1,13 * * 1-5", 5).
@@ -201,13 +201,13 @@ This is supported by formatting the cron spec like this:
 ```
 For example, "@every 1h30m10s" would indicate a schedule that activates after 1 hour, 30 minutes, 10 seconds, and then every interval after that.
 
->Note: The interval takes the job runtime into account. 
+>Note: The interval doesn't take the job runtime into account. 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
 >it will have 5 minutes of idle time between each run.
   
 Implementation
 -----
-TODO
+TODO  explain `singleton` options.
 
 Proper Test
 -----
@@ -220,8 +220,3 @@ TODO
 ----
 * support the last day of a month.
 * support `global` start
-* Maybe persistent jobs?????.
-
-DONE
------
-* support auto-remove job after end_datetime.
