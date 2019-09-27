@@ -37,7 +37,7 @@ time_zone => local | utc,
 worker => pid(),
 next => [calendar:datetime()]}.
 
--type parse_error() :: invaild_time | invaild_spec | month | day_of_month | day_of_week | hour | minute | second.
+-type parse_error() :: invalid_time | invalid_spec | month | day_of_month | day_of_week | hour | minute | second.
 -type start_datetime() :: unlimited | calendar:datetime().
 -type end_datetime() :: unlimited | calendar:datetime().
 
@@ -65,7 +65,7 @@ add(JobName, Spec, MFA, Start, End, Option) ->
                     }, Option);
                 ErrParse -> ErrParse
             end;
-        false -> {error, invaild_time, {Start, End}}
+        false -> {error, invalid_time, {Start, End}}
     end.
 
 -spec delete(name()) -> ok.
@@ -128,7 +128,7 @@ parse_spec(List) when is_list(List) ->
         [_S, _M, _H, _DOM, _Mo, _DOW] = Cron -> parse_cron_spec(Cron);
         [_M, _H, _DOM, _Mo, _DOW] = Cron -> parse_cron_spec(["0" | Cron]);
         ["@every", Sec] -> parse_every_spec(Sec);
-        _ -> {error, invaild_spec, List}
+        _ -> {error, invalid_spec, List}
     end;
 parse_spec(Spec) when is_map(Spec) ->
     {Months, NewSpec} = take(month, Spec),
@@ -142,7 +142,7 @@ parse_spec(Spec) when is_map(Spec) ->
     end;
 parse_spec(Second) when is_integer(Second) andalso Second =< ?MAX_TIMEOUT ->
     {ok, every, Second};
-parse_spec(Spec) -> {error, invaild_spec, Spec}.
+parse_spec(Spec) -> {error, invalid_spec, Spec}.
 
 parse_cron_spec([Second, Minute, Hour, DayOfMonth, Month, DayOfWeek]) ->
     case parse_field(Month, 1, 12) of

@@ -58,8 +58,8 @@ prop_application_error_config() ->
                             Reason}}, {ecron_app, start, [normal, []]}}} ->
                         lists:member(Reason, [
                             {test, error_format},
-                            "invaild_time: {{2019,12,10},unlimited}",
-                            "invaild_spec: test"]) orelse check_spec(Reason, SpecStr);
+                            "invalid_time: {{2019,12,10},unlimited}",
+                            "invalid_spec: test"]) orelse check_spec(Reason, SpecStr);
                     ok ->
                         true
                 end,

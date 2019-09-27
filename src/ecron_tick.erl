@@ -133,7 +133,7 @@ parse_job(JobName, Spec, MFA, Start, End) ->
                 ErrParse -> ErrParse
             end;
         false ->
-            {error, invaild_time, {Start, End}}
+            {error, invalid_time, {Start, End}}
     end.
 
 add_job(#{name := Name} = Job, TZ, Opts, NewJob) ->

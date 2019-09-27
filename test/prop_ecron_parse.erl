@@ -114,7 +114,7 @@ prop_spec_every_error() ->
             {error, Second, Reason} = ecron:parse_spec(SpecStr, 10),
             ?WHENFAIL(
                 io:format("Parse ~s Failed: ~p\n~p\n", [SpecStr, Second, Reason]),
-                lists:member(Second, [second, invaild_spec])
+                lists:member(Second, [second, invalid_spec])
             )
         end).
 
@@ -139,7 +139,7 @@ prop_maybe_error_spec() ->
             end
         end).
 
--define(Fields, [invaild_time, invaild_spec, month, day_of_month, day_of_week, hour, minute, second, no_change]).
+-define(Fields, [invalid_time, invalid_spec, month, day_of_month, day_of_week, hour, minute, second, no_change]).
 
 prop_map_error_spec(doc) -> "parse error map spec failed";
 prop_map_error_spec(opts) -> [{numtests, 5000}].
@@ -156,8 +156,8 @@ prop_map_error_spec() ->
             NewExpect =
                 case Extra of
                     no_change -> Expect;
-                    invaild_time -> Expect;
-                    invaild_spec -> Expect;
+                    invalid_time -> Expect;
+                    invalid_spec -> Expect;
                     second -> maps:put(Extra, [0], Expect);
                     _ -> maps:put(Extra, '*', Expect)
                 end,
@@ -182,7 +182,7 @@ prop_error_format() ->
         {prop_ecron_spec:extend_spec(), range(1, 6), oneof([" spec ", "s", "/1/2", "x-1"])},
         begin
             SpecStr = spec_to_str(Spec, Rand, Extra),
-            {error, Field, Reason} = ecron:parse_spec(SpecStr),
+            {error, Field, Reason} = ecron:add(error_spec, SpecStr, {erlang, datetime, []}),
             ?WHENFAIL(
                 io:format("Parse ~s Failed: \n  ~p\n", [SpecStr, {Field, Reason}]),
                 lists:member(Field, ?Fields)
