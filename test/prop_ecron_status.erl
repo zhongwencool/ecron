@@ -197,8 +197,12 @@ prop_deactivate_already_ended() ->
         begin
             application:ensure_all_started(ecron),
             Shift = 2000,
-            EndMs = erlang:system_time(millisecond) + Shift,
+            Now = erlang:system_time(millisecond),
+            EndMs = Now + Shift,
             EndTime = calendar:system_time_to_local_time(EndMs, millisecond),
+            StartMs = Now - Shift,
+            StartTime = calendar:system_time_to_local_time(StartMs, millisecond),
+            {error, invalid_time, {EndTime, StartTime}} = ecron:add(Name, "@every 1s", {timer, sleep, [500]}, EndTime, StartTime),
             {ok, Name} = ecron:add(Name, "@every 1s", {timer, sleep, [500]}, unlimited, EndTime),
             ok = ecron:deactivate(Name),
             timer:sleep(Shift + 100),
