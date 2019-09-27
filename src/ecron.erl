@@ -127,6 +127,7 @@ parse_spec("@weekly") -> parse_spec("0 0 * * 0");    % Run once a week, midnight
 parse_spec("@midnight") -> parse_spec("0 0 * * *");  % Run once a day, midnight
 parse_spec("@daily") -> parse_spec("0 0 * * *");     % Same as @midnight
 parse_spec("@hourly") -> parse_spec("0 * * * *");    % Run once an hour, beginning of hour
+parse_spec("@minutely") -> parse_spec("* * * * *");
 parse_spec(Bin) when is_binary(Bin) -> parse_spec(binary_to_list(Bin));
 parse_spec(List) when is_list(List) ->
     case string:tokens(string:lowercase(List), " ") of

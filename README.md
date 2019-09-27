@@ -43,14 +43,17 @@ Basic Usage
          {alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
          {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
          %% Runs 0-23 o'clock since {{2019,9,26},{0,0,0}}.
-         {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited}            
+         {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited},
+         %% parallel job         
+         {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
      ]}
 ]
 ```
 
 * When `time_zone` is `local`, current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
 * When `time_zone` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0).
-* The job will be auto remove at the end of the time. 
+* The job will be auto remove at the end of the time.
+* Default job is singleton, Each task cannot be executed concurrently. 
 * It handles not very radical when the system clock is altered, all workers only adjust system time by `{adjusting_time_second, 604800}`.  
   Another way to take effect immediately on all jobs is by running `ecron:activate(Name)` manually. 
 
@@ -64,13 +67,15 @@ Spec = #{second => [0],
        day_of_month => '*',
        day_of_week => [{0,5}]},
 CronMFA = {io, format, ["Runs on 0-5,18 o'clock between Sunday and Firday.~n"]},
-%% crontab  
-{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA), 
+%% with name crontab  
+{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA),  
 ok = ecron:delete(crontabuniqueName),
 %% crontab with startTime and endTime
 StartDateTime = {{2019,9,19},{0,0,0}},
 EndDateTime = {{2020,9,19},{0,0,0}},
-{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA, StartDateTime, EndDateTime), 
+{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA, StartDateTime, EndDateTime),
+%% crontab without name
+{ok, JobName} = ecron:add(Spec, CronMFA, StartDateTime, EndDateTime), 
 ok = ecron:delete(crontabuniqueName),
 %% Runs every 120 second (fixed interval)
 EveryMFA = {io, format, ["Runs every 120 second.~n"]},
@@ -186,6 +191,7 @@ Entry                  | Description                                | Equivalent
 @weekly                | Run once a week, midnight between Sat/Sun  | 0 0 0 * * 0
 @daily (or @midnight)  | Run once a day, midnight                   | 0 0 0 * * *
 @hourly                | Run once an hour, beginning of hour        | 0 0 * * * *
+@minutely              | Run once an minute, beginning of minute    | 0 * * * * *
 
 >There are tools that help when constructing your cronjobs. 
 >You might find something like [https://crontab.guru/](https://crontab.guru/) or [https://cronjob.xyz/](https://cronjob.xyz/) helpful. 
@@ -207,7 +213,7 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
   
 Implementation
 -----
-TODO  explain `singleton` options.
+TODO  
 
 Proper Test
 -----

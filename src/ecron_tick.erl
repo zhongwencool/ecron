@@ -100,18 +100,12 @@ reload_crontab() ->
     reload_crontab(application:get_env(ecron, jobs, [])).
 
 reload_crontab([]) -> ok;
-reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs]) ->
-    case parse_job(Name, Spec, MFA, Start, End) of
-        {ok, Job} ->
-            case ets:lookup(?Job, Name) of
-                [] -> ets:insert(?Job, Job);
-                _ -> ok
-            end,
-            reload_crontab(Jobs);
-        {error, Field, Reason} -> {stop, lists:flatten(io_lib:format("~p: ~p", [Field, Reason]))}
-    end;
 reload_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs]) ->
-    case parse_job(Name, Spec, MFA, unlimited, unlimited) of
+    reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, unlimited, unlimited, [{singleton, true}]} | Jobs]);
+reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs]) ->
+    reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, [{singleton, true}]} | Jobs]);
+reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs]) ->
+    case parse_job(Name, Spec, MFA, Start, End, Opts) of
         {ok, Job} ->
             case ets:lookup(?Job, Name) of
                 [] -> ets:insert(?Job, Job);
@@ -122,14 +116,14 @@ reload_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs]) ->
     end;
 reload_crontab([L | _]) -> {stop, L}.
 
-parse_job(JobName, Spec, MFA, Start, End) ->
+parse_job(JobName, Spec, MFA, Start, End, Opts) ->
     case ecron:valid_datetime(Start, End) of
         true ->
             case ecron:parse_spec(Spec) of
                 {ok, Type, Crontab} ->
                     Job = #{type => Type, name => JobName, crontab => Crontab, mfa => MFA,
                         start_time => Start, end_time => End},
-                    {ok, #job{name = JobName, status = activate, job = Job, opts = [{singleton, true}]}};
+                    {ok, #job{name = JobName, status = activate, job = Job, opts = Opts}};
                 ErrParse -> ErrParse
             end;
         false ->

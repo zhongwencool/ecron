@@ -72,7 +72,7 @@ prop_spec_standard() ->
             end)
     ).
 
--define(PredefinedSpec, ["@yearly", "@annually", "@monthly", "@weekly", "@midnight", "@daily", "@hourly"]).
+-define(PredefinedSpec, ["@yearly", "@annually", "@monthly", "@weekly", "@midnight", "@daily", "@hourly", "@minutely"]).
 
 prop_spec_predefined(doc) -> "ecron:parse_spec/1 predefined spec failed";
 prop_spec_predefined(opts) -> [{numtests, 2000}].
@@ -248,6 +248,8 @@ spec_to_extend("@daily") ->
     spec_to_extend([{'Integer', general, 0}, {'Integer', general, 0}, "*", "*", "*"]);
 spec_to_extend("@hourly") ->
     spec_to_extend([{'Integer', general, 0}, "*", "*", "*", "*"]);
+spec_to_extend("@minutely") ->
+    spec_to_extend(["*", "*", "*", "*", "*"]);
 spec_to_extend([Minute, Hour, Day, Month, Week]) ->
     spec_to_extend([{'Integer', general, 0}, Minute, Hour, Day, Month, Week]);
 spec_to_extend([Second, Minute, Hour, Day, Month, Week]) ->

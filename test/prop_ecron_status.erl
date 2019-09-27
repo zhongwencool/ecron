@@ -160,7 +160,7 @@ prop_singleton(opts) -> [{numtests, 10}].
 prop_singleton() ->
     ?FORALL({Name, Singleton}, {term(), bool()},
         begin
-            application:set_env(ecron, jobs, [{crontab_job_xyz, "@yearly", {io, format, ["Yearly~n"]}}]),
+            application:set_env(ecron, jobs, [{crontab_job_xyz, "@yearly", {io, format, ["Yearly~n"]}, [{singleton, Singleton}]}]),
             application:set_env(ecron, adjusting_time_second, 1),
             application:ensure_all_started(ecron),
             {ok, Name} = ecron:add(Name, "@every 1s", {timer, sleep, [1100]}, unlimited, unlimited, [{singleton, Singleton}]),
