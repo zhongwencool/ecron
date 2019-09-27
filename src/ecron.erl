@@ -1,7 +1,7 @@
 -module(ecron).
 -include("ecron.hrl").
 
--export([add/6, add/5, add/3]).
+-export([add/6, add/5, add/4, add/3]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
@@ -45,6 +45,11 @@ next => [calendar:datetime()]}.
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA) ->
     add(JobName, Spec, MFA, unlimited, unlimited, [{singleton, true}]).
+
+-spec add(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+add(Spec, MFA, Start, End) ->
+    add(erlang:make_ref(), Spec, MFA, Start, End, [{singleton, true}]).
 
 -spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
