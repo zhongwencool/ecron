@@ -160,9 +160,11 @@ prop_singleton(opts) -> [{numtests, 10}].
 prop_singleton() ->
     ?FORALL({Name, Singleton}, {term(), bool()},
         begin
-            application:set_env(ecron, jobs, [{crontab_job_xyz, "@yearly", {io, format, ["Yearly~n"]}, [{singleton, Singleton}]}]),
+            error_logger:tty(false),
+            application:set_env(ecron, jobs, [{crontab_job_xyz, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited, [{singleton, Singleton}]}]),
             application:set_env(ecron, adjusting_time_second, 1),
-            application:ensure_all_started(ecron),
+            application:stop(ecron),
+            application:start(ecron),
             {ok, Name} = ecron:add(Name, "@every 1s", {timer, sleep, [1100]}, unlimited, unlimited, [{singleton, Singleton}]),
             timer:sleep(4200),
             {ok, Res} = ecron_tick:statistic(Name),
@@ -172,6 +174,7 @@ prop_singleton() ->
             ecron:delete(Name),
             Num = case Singleton of true -> 2; false -> 3 end,
             application:set_env(ecron, adjusting_time_second, 100000),
+            error_logger:tty(true),
             Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num
         end).
 
