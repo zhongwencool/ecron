@@ -1,4 +1,4 @@
-ecron
+## ecron
 =====
 [![Build Status](https://travis-ci.org/zhongwencool/ecron.png?branch=master)](https://travis-ci.org/zhongwencool/ecron)
 [![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master)](https://coveralls.io/github/zhongwencool/ecron?branch=master)
@@ -11,7 +11,8 @@ All jobs is assigned to a single process, just run as same as the [timer](http:/
 
 It organize the tasks to be run in a ordered_set ets with the next time to run as key. 
 This way, you only need one process that calculates the time to wait until the next task should be executed, 
-then spawn the process to execute that task. Saves lots of processes.
+then spawn the process to execute that task. Saves lots of processes. 
+more detail see [Implementation](#Implementation).
  
 This implementation also prevents a lot of messages from flying around.
 
@@ -22,7 +23,7 @@ It offers:
 * Use gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 * Minimal overhead. ecron aims to keep its code base small.
 
-Basic Usage 
+## Basic Usage 
 -----
 ```erlang
 %% sys.config
@@ -57,7 +58,7 @@ Basic Usage
 * It handles not very radical when the system clock is altered, all workers only adjust system time by `{adjusting_time_second, 604800}`.  
   Another way to take effect immediately on all jobs is by running `ecron:activate(Name)` manually. 
 
-Advanced Usage 
+## Advanced Usage 
 -----
 ```erlang
 Spec = #{second => [0], 
@@ -68,7 +69,9 @@ Spec = #{second => [0],
        day_of_week => [{0,5}]},
 CronMFA = {io, format, ["Runs on 0-5,18 o'clock between Sunday and Firday.~n"]},
 %% with name crontab  
-{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA),  
+{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA),
+%% or
+{ok, _} = ecron:add(crontabUniqueName, "0 * 0-5,18 * * 0-5", CronMFA),   
 ok = ecron:delete(crontabuniqueName),
 %% crontab with startTime and endTime
 StartDateTime = {{2019,9,19},{0,0,0}},
@@ -81,7 +84,7 @@ ok = ecron:delete(crontabuniqueName),
 EveryMFA = {io, format, ["Runs every 120 second.~n"]},
 {ok, _} = ecron:add(everyUniqueName, 120, EveryMFA),
 ```
-Debug Support
+## Debug Support
 ------
 There are some function to get information for a Job and to handle the Job and Invocations.
 ````erlang
@@ -128,9 +131,9 @@ ok
 }
 ````
 
-CRON Expression Format
+## CRON Expression Format
 -----
-A cron expression represents a set of times, using 5-6 space-separated fields.
+A [cron expression](https://www.wikiwand.com/en/Cron) represents a set of times, using 5-6 space-separated fields.
 Currently, W (nearest weekday), L (last day of month/week), and # (nth weekday of the month) are not supported. 
 
 Most other features supported by popular cron implementations should work just fine.
@@ -180,7 +183,7 @@ For example, using "MON,WED,FRI" in the `day_of_week` field would mean Mondays, 
 Hyphens are used to define ranges. 
 For example, using "9-17" in the `hours`field  would indicate every hour between 9am and 5pm inclusive.
 
-Predefined crontab
+## Predefined crontab
 ------
 You may use one of several pre-defined crontab in place of a cron expression.
 
@@ -198,7 +201,7 @@ Entry                  | Description                                | Equivalent
 >But, note that these don't necessarily accept the exact same syntax as this library, 
 >for instance, it doesn't accept the seconds field, so keep that in mind.
 
-Intervals
+## Intervals
 -----
 You may also schedule a job to execute at fixed intervals, starting at the time it's added or cron is run. 
 This is supported by formatting the cron spec like this:
@@ -211,18 +214,29 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
 >it will have 5 minutes of idle time between each run.
   
-Implementation
+## Implementation
 -----
-TODO  
+1. On application start-up, start a standalone gen_server `ecron` under supervision tree(`ecron_sup`).
+2. Look for configuration `{jobs, Jobs}` when  ecron process initialization.
+3. For each crontab job found, determine the next time in the future that each command must run.
+4. Place those commands on the ordered_set ets with their `{Corresponding_time, Name}` to run as key.
+5. Enter main loop:
+    4.1 Examine the task entry at the head of the ets, compute how far in the future it must run.
+    4.2 Sleep for that period of time by gen_server timeout feature.
+    4.3 On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
+    4.4 Delete old key in ets.
+    4.5 Determine the next time in the future to run this command and place it back on the ets at that time value.
+    
+Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observer by `ecron:statistic(Name)`.       
 
-Proper Test
+## Proper Test
 -----
 
 ```shell
   $ rebar3 do proper -c, cover -v
 ```
 
-TODO
+## TODO
 ----
 * support the last day of a month.
-* support `global` start
+* support `global` by cluster.
