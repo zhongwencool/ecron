@@ -145,7 +145,7 @@ Most other features supported by popular cron implementations should work just f
  # │ │ │ │ │ ┌──── day of week
  # │ │ │ │ │ │
  # │ │ │ │ │ │
- # * * * * * *
+ # 0 * * * * *
 ```
 
 Field name   | Mandatory? | Allowed values  | Allowed special characters
