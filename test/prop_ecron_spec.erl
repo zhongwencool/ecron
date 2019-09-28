@@ -1,7 +1,6 @@
 -module(prop_ecron_spec).
 
 -include_lib("proper/include/proper.hrl").
--import(prop_ecron_helper, [check_day_of_month/1, spec_to_str/1, cron_spec_to_map/1]).
 
 -export([datetime/0, month/0]).
 -export([standard_spec/0, extend_spec/0, integer_spec/2]).
@@ -101,16 +100,16 @@ crontab_spec() ->
     ?LET({MinF, MaxLimitF, StepF}, {Min, MaxLimit, Step}, {'Min-Max/Step', Type, MinF, range(MinF, MaxLimitF), StepF}).
 
 map_spec() ->
-    ?LET(Spec, extend_spec_2(), cron_spec_to_map(Spec)).
+    ?LET(Spec, extend_spec_2(), prop_ecron:cron_spec_to_map(Spec)).
 
 extend_spec_1() ->
-    ?LET(Spec, extend_spec_2(), spec_to_str(Spec)).
+    ?LET(Spec, extend_spec_2(), prop_ecron:spec_to_str(Spec)).
 
 extend_spec_2() ->
-    ?SUCHTHAT(Spec, extend_spec(), check_day_of_month(Spec)).
+    ?SUCHTHAT(Spec, extend_spec(), prop_ecron:check_day_of_month(Spec)).
 
 spec_1() ->
-    ?LET(Spec, spec_2(), spec_to_str(Spec)).
+    ?LET(Spec, spec_2(), prop_ecron:spec_to_str(Spec)).
 
 spec_2() ->
-    ?SUCHTHAT(Spec, standard_spec(), check_day_of_month(Spec)).
+    ?SUCHTHAT(Spec, standard_spec(), prop_ecron:check_day_of_month(Spec)).
