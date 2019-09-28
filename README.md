@@ -220,11 +220,11 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 3. For each crontab job found, determine the next time in the future that each command must run.
 4. Place those commands on the ordered_set ets with their `{Corresponding_time, Name}` to run as key.
 5. Enter main loop:
-    4.1 Examine the task entry at the head of the ets, compute how far in the future it must run.
-    4.2 Sleep for that period of time by gen_server timeout feature.
-    4.3 On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
-    4.4 Delete old key in ets.
-    4.5 Determine the next time in the future to run this command and place it back on the ets at that time value.
+    * Examine the task entry at the head of the ets, compute how far in the future it must run.
+    * Sleep for that period of time by gen_server timeout feature.
+    * On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
+    * Delete old key in ets.
+    * Determine the next time in the future to run this command and place it back on the ets at that time value.
     
 Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observer by `ecron:statistic(Name)`.       
 
