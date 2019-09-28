@@ -1,5 +1,4 @@
 ## ecron
-=====
 [![Build Status](https://travis-ci.org/zhongwencool/ecron.png?branch=master)](https://travis-ci.org/zhongwencool/ecron)
 [![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master)](https://coveralls.io/github/zhongwencool/ecron?branch=master)
 [![Hex.pm](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron)
@@ -24,7 +23,7 @@ It offers:
 * Minimal overhead. ecron aims to keep its code base small.
 
 ## Basic Usage 
------
+
 ```erlang
 %% sys.config
 [
@@ -59,7 +58,7 @@ It offers:
   Another way to take effect immediately on all jobs is by running `ecron:activate(Name)` manually. 
 
 ## Advanced Usage 
------
+
 ```erlang
 Spec = #{second => [0], 
        minute => '*',   
@@ -85,7 +84,7 @@ EveryMFA = {io, format, ["Runs every 120 second.~n"]},
 {ok, _} = ecron:add(everyUniqueName, 120, EveryMFA),
 ```
 ## Debug Support
-------
+
 There are some function to get information for a Job and to handle the Job and Invocations.
 ````erlang
 1> ecron:deactivate(CrontabName).
@@ -132,7 +131,7 @@ ok
 ````
 
 ## CRON Expression Format
------
+
 A [cron expression](https://www.wikiwand.com/en/Cron) represents a set of times, using 5-6 space-separated fields.
 Currently, W (nearest weekday), L (last day of month/week), and # (nth weekday of the month) are not supported. 
 
@@ -184,7 +183,7 @@ Hyphens are used to define ranges.
 For example, using "9-17" in the `hours`field  would indicate every hour between 9am and 5pm inclusive.
 
 ## Predefined crontab
-------
+
 You may use one of several pre-defined crontab in place of a cron expression.
 
 Entry                  | Description                                | Equivalent To
@@ -202,7 +201,7 @@ Entry                  | Description                                | Equivalent
 >for instance, it doesn't accept the seconds field, so keep that in mind.
 
 ## Intervals
------
+
 You may also schedule a job to execute at fixed intervals, starting at the time it's added or cron is run. 
 This is supported by formatting the cron spec like this:
 ```shell
@@ -215,7 +214,7 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 >it will have 5 minutes of idle time between each run.
   
 ## Implementation
------
+
 1. On application start-up, start a standalone gen_server `ecron` under supervision tree(`ecron_sup`).
 2. Look for configuration `{jobs, Jobs}` when  ecron process initialization.
 3. For each crontab job found, determine the next time in the future that each command must run.
@@ -230,13 +229,13 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observer by `ecron:statistic(Name)`.       
 
 ## Proper Test
------
+
 
 ```shell
   $ rebar3 do proper -c, cover -v
 ```
 
 ## TODO
-----
+
 * support the last day of a month.
 * support `global` by cluster.
