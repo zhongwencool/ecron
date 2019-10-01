@@ -226,7 +226,7 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
     * Delete old key in ets.
     * Determine the next time in the future to run this command and place it back on the ets at that time value.
     
-Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observer by `ecron:statistic(Name)`.       
+Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.       
 
 ## Proper Test
 
@@ -238,4 +238,4 @@ Additionally, this ecron also collect the MFA latest 16 results and execute time
 ## TODO
 
 * support the last day of a month.
-* support `global` by cluster.
+* support `global` in cluster.
