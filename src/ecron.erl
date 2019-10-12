@@ -1,7 +1,8 @@
 -module(ecron).
 -include("ecron.hrl").
 
--export([add/6, add/5, add/4, add/3]).
+-export([add/3, add/5, add/6]).
+-export([add_with_datetime/4, add_with_count/3]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
@@ -44,17 +45,22 @@ next => [calendar:datetime()]}.
 -spec add(name(), crontab_spec(), mfa()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA) ->
-    add(JobName, Spec, MFA, unlimited, unlimited, [{singleton, true}]).
-
--spec add(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
-    {ok, name()} | {error, parse_error(), term()}.
-add(Spec, MFA, Start, End) ->
-    add(erlang:make_ref(), Spec, MFA, Start, End, [{singleton, true}]).
+    add(JobName, Spec, MFA, unlimited, unlimited, []).
 
 -spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA, Start, End) ->
-    add(JobName, Spec, MFA, Start, End, [{singleton, true}]).
+    add(JobName, Spec, MFA, Start, End, []).
+
+-spec add_with_count(crontab_spec(), mfa(), pos_integer()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
+    add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
+
+-spec add_with_datetime(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+add_with_datetime(Spec, MFA, Start, End) ->
+    add(make_ref(), Spec, MFA, Start, End, []).
 
 -spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime(), proplists:proplists()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
