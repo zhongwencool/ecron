@@ -4,6 +4,7 @@
 -export([add/3, add/5, add/6]).
 -export([add_with_datetime/4, add_with_count/3]).
 -export([send_interval/3, send_interval/5, send_interval/7]).
+-export([send_after/3]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
@@ -97,6 +98,24 @@ add(JobName, Spec, MFA, Start, End, Option) ->
                 ErrParse -> ErrParse
             end;
         false -> {error, invalid_time, {Start, End}}
+    end.
+
+%% @doc
+%% Starts a timer which will send the message Msg to Dest when crontab is triggered.
+%% Equivalent to `erlang:send_after/3' expect the `Time' format.
+%% If Dest is a pid() it has to be a pid() of a local process, dead or alive.
+%% The Time value can, in the current implementation, not be greater than 4294967295.
+%% If Dest is an atom(), it is supposed to be the name of a registered process. The process referred to by the name is looked up at the time of delivery. No error is given if the name does not refer to a process.
+%% If Dest is a pid(), the timer will be automatically canceled if the process referred to by the pid() is not alive, or when the process exits.
+-spec send_after(crontab_spec(), pid()|atom(), term()) ->
+    {ok, reference()} | {error, parse_error(), term()}.
+send_after(Spec, Pid, Message) ->
+    case parse_spec(Spec, 1) of
+        {ok, #{next := [Next]}} ->
+            NextMs = calendar:rfc3339_to_system_time(Next, [{'unit', second}]) * 1000,
+            Time = NextMs - erlang:system_time(millisecond),
+            {ok, erlang:send_after(Time, Pid, Message)};
+        Err -> Err
     end.
 
 %% @equiv send_interval(make_ref(), Spec, Pid, Message, unlimited, unlimited, [])
