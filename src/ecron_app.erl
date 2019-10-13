@@ -1,3 +1,4 @@
+%%% @private
 -module(ecron_app).
 
 -behaviour(application).

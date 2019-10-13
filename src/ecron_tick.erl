@@ -1,3 +1,4 @@
+%%% @private
 -module(ecron_tick).
 -include("ecron.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
