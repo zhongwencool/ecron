@@ -10,8 +10,9 @@
 -export([spawn_mfa/2]).
 
 -record(state, {time_zone, max_timeout}).
--record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0, result = [], run_microsecond = []}).
--record(timer, {key, name, cur_count = 1, singleton, type, spec, mfa,
+-record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
+    link = undefined, result = [], run_microsecond = []}).
+-record(timer, {key, name, cur_count = 1, singleton, type, spec, mfa, link,
     start_sec = unlimited, end_sec = unlimited, max_count = unlimited}).
 -define(Timer, ecron_timer).
 
@@ -44,6 +45,7 @@ start_link(Name) ->
     gen_server:start_link(Name, ?MODULE, [], []).
 
 init([]) ->
+    erlang:process_flag(trap_exit, true),
     TZ = get_time_zone(),
     ?Timer = ets:new(?Timer, [named_table, ordered_set, private, {keypos, #timer.key}]),
     MaxTimeout = application:get_env(?Ecron, adjusting_time_second, 7 * 24 * 3600) * 1000,
@@ -88,6 +90,10 @@ handle_call(_Unknown, _From, State) ->
 handle_info(timeout, State) ->
     {noreply, State, tick(State)};
 
+handle_info({'EXIT', Pid, _Reason}, State) ->
+    pid_delete(Pid),
+    {noreply, State, next_timeout(State)};
+
 handle_info(_Unknown, State) ->
     {noreply, State, next_timeout(State)}.
 
@@ -124,20 +130,22 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
                 {ok, Type, Crontab} ->
                     Job = #{type => Type, name => JobName, crontab => Crontab, mfa => MFA,
                         start_time => Start, end_time => End},
-                    {ok, #job{name = JobName, status = activate, job = Job, opts = Opts}};
+                    {ok, #job{name = JobName,
+                        status = activate, job = Job,
+                        opts = valid_opts(Opts),
+                        link = link_pid(MFA)}};
                 ErrParse -> ErrParse
             end;
         false ->
             {error, invalid_time, {Start, End}}
     end.
 
-add_job(#{name := Name} = Job, TZ, Opts, NewJob) ->
-    Singleton = proplists:get_value(singleton, Opts, true),
-    MaxCount = proplists:get_value(max_count, Opts, unlimited),
-    NewOpts = [{singleton, Singleton}, {max_count, MaxCount}],
-    JobRec = #job{status = activate, name = Name, job = Job, opts = NewOpts},
+add_job(#{name := Name, mfa := MFA} = Job, TZ, Opts, NewJob) ->
+    NewOpts = valid_opts(Opts),
+    Pid = link_pid(MFA),
+    JobRec = #job{status = activate, name = Name, job = Job, opts = NewOpts, link = Pid},
     Insert = ets:insert_new(?Job, JobRec),
-    update_timer(Insert orelse NewJob, TZ, Singleton, MaxCount, Job, current_millisecond()).
+    update_timer(Insert orelse NewJob, TZ, NewOpts, Job, current_millisecond(), Pid).
 
 activate_job(Name, TZ) ->
     case ets:lookup(?Job, Name) of
@@ -159,10 +167,17 @@ deactivate_job(Name) ->
 
 delete_job(Name) ->
     ets:select_delete(?Timer, ?MatchSpec(Name)),
-    ets:delete(?Job, Name).
+    case ets:lookup(?Job, Name) of
+        [] -> ok;
+        [#job{link = Link}] ->
+            unlink_pid(Link),
+            ets:delete(?Job, Name)
+    end.
 
 update_timer(false, _, _, _, _, _) -> {error, already_exist};
-update_timer(true, TZ, Singleton, MaxCount, Job, Now) ->
+update_timer(true, TZ, Opts, Job, Now, LinkPid) ->
+    Singleton = proplists:get_value(singleton, Opts),
+    MaxCount = proplists:get_value(max_count, Opts),
     #{name := Name, crontab := Spec, type := Type, mfa := MFA,
         start_time := StartTime, end_time := EndTime} = Job,
     Start = datetime_to_millisecond(TZ, StartTime),
@@ -171,11 +186,11 @@ update_timer(true, TZ, Singleton, MaxCount, Job, Now) ->
         {ok, NextSec} ->
             Timer = #timer{key = {NextSec, Name}, singleton = Singleton,
                 name = Name, type = Type, spec = Spec, max_count = MaxCount,
-                mfa = MFA, start_sec = Start, end_sec = End},
+                mfa = MFA, start_sec = Start, end_sec = End, link = LinkPid},
             ets:insert(?Timer, Timer),
             {ok, Name};
         {error, already_ended} = Err ->
-            ets:delete(?Job, Name),
+            delete_job(Name),
             Err
     end.
 
@@ -196,6 +211,9 @@ spawn_mfa(Name, MFA) ->
     {OkInc, FailedInc, NewRes} =
         try
             case MFA of
+                {erlang, send, [Pid, Message]} ->
+                    erlang:send(Pid, Message),
+                    {1, 0, ok};
                 {M, F, A} -> {1, 0, apply(M, F, A)};
                 {F, A} -> {1, 0, apply(F, A)}
             end
@@ -231,7 +249,7 @@ tick_tick(Key = {_, Name}, Cur, State) ->
     update_next_schedule(CurCount + Incr, MaxCount, Cron, Cur, Name, TZ, CurPid),
     tick(State).
 
-update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid) -> ets:delete(?Job, Name);
+update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid) -> delete_job(Name);
 update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid) ->
     #timer{type = Type, start_sec = Start, end_sec = End, spec = Spec} = Cron,
     case next_schedule_millisecond(Type, Spec, TZ, Cur, Start, End) of
@@ -239,7 +257,7 @@ update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid) ->
             NextTimer = Cron#timer{key = {Next, Name}, singleton = CurPid, cur_count = Count},
             ets:insert(?Timer, NextTimer);
         {error, already_ended} ->
-            ets:delete(?Job, Name)
+            delete_job(Name)
     end.
 
 next_schedule_millisecond(every, Sec, _TimeZone, Now, Start, End) ->
@@ -459,6 +477,8 @@ predict_datetime(Job, TimeZone, Now, Start, End, Num, Acc) ->
 
 get_time_zone() -> application:get_env(?Ecron, time_zone, local).
 
+maybe_spawn_worker(_, Name, {erlang, send, Args}) ->
+    {1, spawn_mfa(Name, {erlang, send, Args})};
 maybe_spawn_worker(true, Name, MFA) ->
     {1, spawn(?MODULE, spawn_mfa, [Name, MFA])};
 maybe_spawn_worker(false, Name, MFA) ->
@@ -469,6 +489,34 @@ maybe_spawn_worker(Pid, Name, MFA) when is_pid(Pid) ->
         true -> {0, Pid};
         false -> {1, spawn(?MODULE, spawn_mfa, [Name, MFA])}
     end.
+
+pid_delete(undefined) -> ok;
+pid_delete(Pid) ->
+    TimerMatch = [{#timer{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],
+    JobMatch = [{#job{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],
+    ets:select_delete(?Timer, TimerMatch),
+    ets:select_delete(?Job, JobMatch).
+
+valid_opts(Opts) ->
+    Singleton = proplists:get_value(singleton, Opts, true),
+    MaxCount = proplists:get_value(max_count, Opts, unlimited),
+    [{singleton, Singleton}, {max_count, MaxCount}].
+link_pid({erlang, send, [PidOrName, _Message]}) ->
+    Pid = get_pid(PidOrName),
+    case is_pid(Pid) of
+        true -> catch link(Pid);
+        false -> ok
+    end,
+    Pid;
+link_pid(_MFA) -> undefined.
+
+unlink_pid(Pid) when is_pid(Pid) -> catch unlink(Pid);
+unlink_pid(_) -> ok.
+
+get_pid(Name) when is_pid(Name) -> Name;
+get_pid(undefined) -> undefined;
+get_pid(Name) when is_atom(Name) -> get_pid(whereis(Name));
+get_pid(_) -> undefined.
 
 %% For PropEr Test
 -ifdef(TEST).

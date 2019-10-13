@@ -3,6 +3,7 @@
 
 -export([add/3, add/5, add/6]).
 -export([add_with_datetime/4, add_with_count/3]).
+-export([send_interval/3, send_interval/6, send_interval/7]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
@@ -61,6 +62,23 @@ add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_datetime(Spec, MFA, Start, End) ->
     add(make_ref(), Spec, MFA, Start, End, []).
+
+-spec send_interval(crontab_spec(), pid(), term()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+send_interval(Spec, Pid, Message) ->
+    send_interval(make_ref(), Spec, Pid, Message, unlimited, unlimited, []).
+
+-spec send_interval(crontab_spec(), pid(), term(), start_datetime(),
+    end_datetime(), proplists:proplists()) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+send_interval(Spec, Pid, Message, Start, End, Option) ->
+    send_interval(make_ref(), Spec, Pid, Message, Start, End, Option).
+
+-spec send_interval(name(), crontab_spec(), pid(), term(), start_datetime(),
+    end_datetime(), proplists:proplists()) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+send_interval(JobName, Spec, Pid, Message, Start, End, Option) ->
+    add(JobName, Spec, {erlang, send, [Pid, Message]}, Start, End, Option).
 
 -spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime(), proplists:proplists()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.

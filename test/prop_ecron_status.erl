@@ -144,7 +144,7 @@ prop_restart_server() ->
             {ok, Name} = ecron:add(Name, "@yearly", {io, format, ["Yearly~n"]}),
             Res1 = ecron:statistic(Name),
             Pid = erlang:whereis(?Ecron),
-            erlang:exit(Pid, killed),
+            erlang:exit(Pid, kill),
             timer:sleep(200),
             NewPid = erlang:whereis(?Ecron),
             Res2 = ecron:statistic(Name),
