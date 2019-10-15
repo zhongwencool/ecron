@@ -28,7 +28,7 @@ end_time => calendar:rfc3339_string() | unlimited,
 mfa => mfa(),
 type => cron | every}.
 
--type status() :: deactivate | activate.
+-type status() :: waiting | running | deactivate | activate | already_ended.
 
 -type statistic() :: #{ecron => ecron(),
 status => status(),
@@ -103,8 +103,9 @@ add(JobName, Spec, MFA, Start, End, Option) ->
 %% @doc
 %% Starts a timer which will send the message Msg to Dest when crontab is triggered.
 %% <ul>
-%% <li>This function works exactly as `erlang:send_after/3' expect the `Time' format. </li>
+%% <li>Equivalent to `erlang:send_after/3' expect the `Time' format. </li>
 %% <li>If Dest is a pid() it has to be a pid() of a local process, dead or alive.</li>
+%% <li>The Time value can, in the current implementation, not be greater than <strong>4294967295</strong>. </li>
 %% <li>If Dest is an atom(), it is supposed to be the name of a registered process. The process referred to by the name is looked up at the time of delivery. No error is given if the name does not refer to a process.</li>
 %% <li>If Dest is a pid(), the timer will be automatically canceled if the process referred to by the pid() is not alive, or when the process exits.</li>
 %% <li><strong>Warning:</strong> Cancels a timer by `erlang:cancel_timer(Ref)' not `ecron:delete/1'.</li>

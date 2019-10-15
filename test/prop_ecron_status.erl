@@ -11,8 +11,6 @@
 -export([prop_auto_remove/0, prop_auto_remove/1]).
 -export([prop_deactivate_already_ended/0, prop_deactivate_already_ended/1]).
 -export([prop_restart_server/0, prop_restart_server/1]).
--export([prop_send_after/0, prop_send_after/1]).
--export([prop_send_interval/0, prop_send_interval/1]).
 
 -export([echo/2]).
 
@@ -180,6 +178,7 @@ prop_singleton() ->
             Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num
         end).
 
+<<<<<<< HEAD
 prop_send_after(doc) -> "send_after";
 prop_send_after(opts) -> [{numtests, 10}].
 prop_send_after() ->
@@ -220,6 +219,8 @@ prop_send_interval() ->
                 length(Results) =:= Ok andalso length(RunMs) =:= Ok
         end).
 
+=======
+>>>>>>> parent of 4cab3d1... add more test
 prop_auto_remove(doc) -> "auto remove after already_ended";
 prop_auto_remove(opts) -> [{numtests, 5}].
 prop_auto_remove() ->
@@ -287,15 +288,6 @@ add_time(Shift) ->
     Now = calendar:local_time(),
     calendar:gregorian_seconds_to_datetime(
         calendar:datetime_to_gregorian_seconds(Now) + Shift).
-
-store() ->
-    receive
-        {exit, Pid} -> erlang:send(Pid, exit);
-        {add, Pid, Message} ->
-            erlang:send(Pid, Message),
-            store()
-    after 1100 -> ok
-    end.
 
 %%%%%%%%%%%%%%%%%%
 %%% Generators %%%
