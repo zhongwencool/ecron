@@ -187,7 +187,6 @@ prop_send_after() ->
             {ok, _} = ecron:send_after("@every 2s", self(), Message),
             Res = receive Message -> ok after 2100 -> error end,
             {ok, Ref} = ecron:send_after("@every 1s", self(), Message),
-            {error, Ref} = ecron:send_after("@every1 1s", self(), Message),
             RMS = erlang:cancel_timer(Ref),
             Res2 = receive Message -> ok after 1100 -> error end,
             Res =:= ok andalso Res2 =:= error andalso RMS =< 1000
