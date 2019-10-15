@@ -11,6 +11,9 @@
 -export([prop_auto_remove/0, prop_auto_remove/1]).
 -export([prop_deactivate_already_ended/0, prop_deactivate_already_ended/1]).
 -export([prop_restart_server/0, prop_restart_server/1]).
+-export([prop_send_after/0, prop_send_after/1]).
+-export([prop_send_interval/0, prop_send_interval/1]).
+-export([prop_add_with_count/0, prop_add_with_count/1]).
 
 -export([echo/2]).
 
@@ -178,7 +181,6 @@ prop_singleton() ->
             Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num
         end).
 
-<<<<<<< HEAD
 prop_send_after(doc) -> "send_after";
 prop_send_after(opts) -> [{numtests, 10}].
 prop_send_after() ->
@@ -187,6 +189,7 @@ prop_send_after() ->
             {ok, _} = ecron:send_after("@every 2s", self(), Message),
             Res = receive Message -> ok after 2100 -> error end,
             {ok, Ref} = ecron:send_after("@every 1s", self(), Message),
+            {error, invalid_spec, "@every1 1s"} = ecron:send_after("@every1 1s", self(), Message),
             RMS = erlang:cancel_timer(Ref),
             Res2 = receive Message -> ok after 1100 -> error end,
             Res =:= ok andalso Res2 =:= error andalso RMS =< 1000
@@ -213,13 +216,13 @@ prop_send_interval() ->
             Res4 = receive exit -> ok after 600 -> error end,
             timer:sleep(200),
             {error, not_found} = ecron:statistic(Name),
+            
+            {ok, Name1} = ecron:send_interval("0 1 1 * * *", Message, unlimited, unlimited, []),
             error_logger:tty(true),
             Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res3 =:= Res4 andalso
-                length(Results) =:= Ok andalso length(RunMs) =:= Ok
+                length(Results) =:= Ok andalso length(RunMs) =:= Ok andalso Name1 =/= Name
         end).
 
-=======
->>>>>>> parent of 4cab3d1... add more test
 prop_auto_remove(doc) -> "auto remove after already_ended";
 prop_auto_remove(opts) -> [{numtests, 5}].
 prop_auto_remove() ->
@@ -255,6 +258,19 @@ prop_deactivate_already_ended() ->
             Result =:= {error, already_ended}
         end).
 
+prop_add_with_count(doc) -> "add_with_count";
+prop_add_with_count(opts) -> [{numtests, 5}].
+prop_add_with_count() ->
+    ?FORALL(Name, term(),
+        begin
+            application:ensure_all_started(ecron),
+            {ok, _Name} = ecron:add_with_count("@every 1s", {erlang, send, [self(), test]}, 2),
+            Res1 = receive test -> ok after 1100 -> error end,
+            Res2 = receive test -> ok after 1100 -> error end,
+            Res3 = receive test -> ok after 1100 -> error end,
+            Res1 =:= ok andalso Res2 =:= ok andalso Res3 =:= error
+        end).
+
 %%%%%%%%%%%%%%%
 %%% Helpers %%%
 %%%%%%%%%%%%%%%
@@ -287,6 +303,15 @@ add_time(Shift) ->
     Now = calendar:local_time(),
     calendar:gregorian_seconds_to_datetime(
         calendar:datetime_to_gregorian_seconds(Now) + Shift).
+
+store() ->
+    receive
+        {exit, Pid} -> erlang:send(Pid, exit);
+        {add, Pid, Message} ->
+            erlang:send(Pid, Message),
+            store()
+    after 1100 -> ok
+    end.
 
 %%%%%%%%%%%%%%%%%%
 %%% Generators %%%

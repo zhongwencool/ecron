@@ -13,7 +13,7 @@
 -record(state, {time_zone, max_timeout}).
 -record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
     link = undefined, result = [], run_microsecond = []}).
--record(timer, {key, name, cur_count = 1, singleton, type, spec, mfa, link,
+-record(timer, {key, name, cur_count = 0, singleton, type, spec, mfa, link,
     start_sec = unlimited, end_sec = unlimited, max_count = unlimited}).
 -define(Timer, ecron_timer).
 
@@ -491,7 +491,6 @@ maybe_spawn_worker(Pid, Name, MFA) when is_pid(Pid) ->
         false -> {1, spawn(?MODULE, spawn_mfa, [Name, MFA])}
     end.
 
-pid_delete(undefined) -> ok;
 pid_delete(Pid) ->
     TimerMatch = [{#timer{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],
     JobMatch = [{#job{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],
@@ -503,20 +502,19 @@ valid_opts(Opts) ->
     MaxCount = proplists:get_value(max_count, Opts, unlimited),
     [{singleton, Singleton}, {max_count, MaxCount}].
 link_pid({erlang, send, [PidOrName, _Message]}) ->
-    Pid = get_pid(PidOrName),
-    case is_pid(Pid) of
-        true -> catch link(Pid);
-        false -> ok
-    end,
-    Pid;
+    case get_pid(PidOrName) of
+        Pid when is_pid(Pid) ->
+            catch link(Pid),
+            Pid;
+        undefined -> undefined
+    end;
 link_pid(_MFA) -> undefined.
 
 unlink_pid(Pid) when is_pid(Pid) -> catch unlink(Pid);
 unlink_pid(_) -> ok.
 
-get_pid(Name) when is_pid(Name) -> Name;
-get_pid(undefined) -> undefined;
-get_pid(Name) when is_atom(Name) -> get_pid(whereis(Name));
+get_pid(Pid) when is_pid(Pid) -> Pid;
+get_pid(Name) when is_atom(Name) -> whereis(Name);
 get_pid(_) -> undefined.
 
 %% For PropEr Test
