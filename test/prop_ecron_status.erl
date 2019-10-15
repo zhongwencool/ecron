@@ -11,6 +11,8 @@
 -export([prop_auto_remove/0, prop_auto_remove/1]).
 -export([prop_deactivate_already_ended/0, prop_deactivate_already_ended/1]).
 -export([prop_restart_server/0, prop_restart_server/1]).
+-export([prop_send_after/0, prop_send_after/1]).
+-export([prop_send_interval/0, prop_send_interval/1]).
 
 -export([echo/2]).
 
@@ -178,6 +180,45 @@ prop_singleton() ->
             Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num
         end).
 
+prop_send_after(doc) -> "send_after";
+prop_send_after(opts) -> [{numtests, 10}].
+prop_send_after() ->
+    ?FORALL(Message, term(),
+        begin
+            {ok, _} = ecron:send_after("@every 2s", self(), Message),
+            Res = receive Message -> ok after 2100 -> error end,
+            {ok, Ref} = ecron:send_after("@every 1s", self(), Message),
+            RMS = erlang:cancel_timer(Ref),
+            Res2 = receive Message -> ok after 1100 -> error end,
+            Res =:= ok andalso Res2 =:= error andalso RMS =< 1000
+        end).
+
+prop_send_interval(doc) -> "send_interval";
+prop_send_interval(opts) -> [{numtests, 10}].
+prop_send_interval() ->
+    ?FORALL(Message, term(),
+        begin
+            error_logger:tty(false),
+            application:stop(ecron),
+            application:start(ecron),
+            Pid = spawn(fun store/0),
+            {ok, Name} = ecron:send_interval("* * * * * *", Pid, {add, self(), Message}),
+            Res1 = receive Message -> ok after 1100 -> error end,
+            Res2 = receive Message -> ok after 1100 -> error end,
+            Res3 = receive Message -> ok after 1100 -> error end,
+            {ok, Res} = ecron_tick:statistic(Name),
+            #{start_time := unlimited, end_time := unlimited, status := activate,
+                failed := 0, ok := Ok, results := Results, run_microsecond := RunMs
+            } = Res,
+            erlang:send(Pid, {exit, self()}),
+            Res4 = receive exit -> ok after 600 -> error end,
+            timer:sleep(200),
+            {error, not_found} = ecron:statistic(Name),
+            error_logger:tty(true),
+            Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res3 =:= Res4 andalso
+                length(Results) =:= Ok andalso length(RunMs) =:= Ok
+        end).
+
 prop_auto_remove(doc) -> "auto remove after already_ended";
 prop_auto_remove(opts) -> [{numtests, 5}].
 prop_auto_remove() ->
@@ -245,6 +286,15 @@ add_time(Shift) ->
     Now = calendar:local_time(),
     calendar:gregorian_seconds_to_datetime(
         calendar:datetime_to_gregorian_seconds(Now) + Shift).
+
+store() ->
+    receive
+        {exit, Pid} -> erlang:send(Pid, exit);
+        {add, Pid, Message} ->
+            erlang:send(Pid, Message),
+            store()
+    after 1100 -> ok
+    end.
 
 %%%%%%%%%%%%%%%%%%
 %%% Generators %%%
