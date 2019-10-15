@@ -502,20 +502,16 @@ valid_opts(Opts) ->
     MaxCount = proplists:get_value(max_count, Opts, unlimited),
     [{singleton, Singleton}, {max_count, MaxCount}].
 link_pid({erlang, send, [PidOrName, _Message]}) ->
-    case get_pid(PidOrName) of
-        Pid when is_pid(Pid) ->
-            catch link(Pid),
-            Pid;
-        undefined -> undefined
-    end;
+    Pid = get_pid(PidOrName),
+    is_pid(Pid) andalso (catch link(Pid)),
+    Pid;
 link_pid(_MFA) -> undefined.
 
 unlink_pid(Pid) when is_pid(Pid) -> catch unlink(Pid);
 unlink_pid(_) -> ok.
 
 get_pid(Pid) when is_pid(Pid) -> Pid;
-get_pid(Name) when is_atom(Name) -> whereis(Name);
-get_pid(_) -> undefined.
+get_pid(Name) when is_atom(Name) -> whereis(Name).
 
 %% For PropEr Test
 -ifdef(TEST).

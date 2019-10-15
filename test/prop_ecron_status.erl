@@ -12,7 +12,7 @@
 -export([prop_deactivate_already_ended/0, prop_deactivate_already_ended/1]).
 -export([prop_restart_server/0, prop_restart_server/1]).
 -export([prop_send_after/0, prop_send_after/1]).
--export([prop_send_interval/0, prop_send_interval/1]).
+-export([prop_ecron_send_interval/0, prop_ecron_send_interval/1]).
 -export([prop_add_with_count/0, prop_add_with_count/1]).
 
 -export([echo/2]).
@@ -195,32 +195,37 @@ prop_send_after() ->
             Res =:= ok andalso Res2 =:= error andalso RMS =< 1000
         end).
 
-prop_send_interval(doc) -> "send_interval";
-prop_send_interval(opts) -> [{numtests, 10}].
-prop_send_interval() ->
-    ?FORALL(Message, term(),
+prop_ecron_send_interval(doc) -> "send_interval";
+prop_ecron_send_interval(opts) -> [{numtests, 10}].
+prop_ecron_send_interval() ->
+    ?FORALL({Message, NeedReg, Name}, {term(), bool(), atom()},
         begin
             error_logger:tty(false),
-            application:stop(ecron),
-            application:start(ecron),
-            Pid = spawn(fun store/0),
-            {ok, Name} = ecron:send_interval("* * * * * *", Pid, {add, self(), Message}),
+            application:ensure_all_started(ecron),
+            Target =
+                case NeedReg of
+                    false -> spawn(fun store/0);
+                    true ->
+                        Pid = spawn(fun store/0),
+                        true = erlang:register(Name, Pid),
+                        Name
+                end,
+            {ok, Job} = ecron:send_interval("* * * * * *", Target, {add, self(), Message}),
             Res1 = receive Message -> ok after 1100 -> error end,
             Res2 = receive Message -> ok after 1100 -> error end,
             Res3 = receive Message -> ok after 1100 -> error end,
-            {ok, Res} = ecron_tick:statistic(Name),
+            {ok, Res} = ecron_tick:statistic(Job),
             #{start_time := unlimited, end_time := unlimited, status := activate,
                 failed := 0, ok := Ok, results := Results, run_microsecond := RunMs
             } = Res,
-            erlang:send(Pid, {exit, self()}),
-            Res4 = receive exit -> ok after 600 -> error end,
-            timer:sleep(200),
-            {error, not_found} = ecron:statistic(Name),
-            
-            {ok, Name1} = ecron:send_interval("0 1 1 * * *", Message, unlimited, unlimited, []),
+            erlang:send(Target, {exit, self()}),
+            Res4 = receive exit -> ok after 800 -> error end,
+            timer:sleep(160),
+            {error, not_found} = ecron:statistic(Job),
+            {ok, Job1} = ecron:send_interval("0 1 1 * * *", Message, unlimited, unlimited, []),
             error_logger:tty(true),
-            Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res3 =:= Res4 andalso
-                length(Results) =:= Ok andalso length(RunMs) =:= Ok andalso Name1 =/= Name
+            Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res1 =:= ok andalso Res4 =:= ok andalso
+                length(Results) =:= Ok andalso length(RunMs) =:= Ok andalso Job1 =/= Job
         end).
 
 prop_auto_remove(doc) -> "auto remove after already_ended";
@@ -261,10 +266,10 @@ prop_deactivate_already_ended() ->
 prop_add_with_count(doc) -> "add_with_count";
 prop_add_with_count(opts) -> [{numtests, 5}].
 prop_add_with_count() ->
-    ?FORALL(Name, term(),
+    ?FORALL(_Name, term(),
         begin
             application:ensure_all_started(ecron),
-            {ok, _Name} = ecron:add_with_count("@every 1s", {erlang, send, [self(), test]}, 2),
+            {ok, _Name1} = ecron:add_with_count("@every 1s", {erlang, send, [self(), test]}, 2),
             Res1 = receive test -> ok after 1100 -> error end,
             Res2 = receive test -> ok after 1100 -> error end,
             Res3 = receive test -> ok after 1100 -> error end,
