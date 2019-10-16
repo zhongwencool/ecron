@@ -8,6 +8,7 @@
 
 -export([
     add_cron_new/3, add_cron_existing/3, add_cron_new/4, add_cron_existing/4,
+    add_with_count/3, add_with_datetime/3,
     add_every_new/3, add_every_existing/3, add_every_new/4, add_every_existing/4,
     delete_existing/1, delete_unknown/1,
     deactivate_unknown/1, deactivate_existing/1,
@@ -49,6 +50,8 @@ command(State) ->
             {5, {call, ?MODULE, add_cron_new, [new_name(State), prop_ecron_spec:crontab_spec(), mfa(), datetime()]}},
             {4, {call, ?MODULE, add_every_new, [new_name(State), range(1, ?MAX_TIMEOUT), mfa()]}},
             {4, {call, ?MODULE, add_every_new, [new_name(State), range(1, ?MAX_TIMEOUT), mfa(), datetime()]}},
+            {4, {call, ?MODULE, add_with_count, [prop_ecron_spec:crontab_spec(), mfa(), range(100, 1000)]}},
+            {4, {call, ?MODULE, add_with_datetime, [prop_ecron_spec:crontab_spec(), mfa(), datetime()]}},
             {1, {call, ?MODULE, delete_unknown, [new_name(State)]}},
             {1, {call, ?MODULE, deactivate_unknown, [new_name(State)]}},
             {1, {call, ?MODULE, activate_unknown, [new_name(State)]}},
@@ -94,6 +97,10 @@ precondition(_State, {call, _Mod, _Fun, _Args}) -> true.
 
 postcondition(_State, {call, _Mod, add_cron_new, [_Name | _] = Args}, Res) ->
     check_add_new(Args, Res);
+postcondition(_State, {call, _Mod, add_with_count, [_ | _] = Args}, Res) ->
+    check_add_with_limit(Args, Res);
+postcondition(_State, {call, _Mod, add_with_datetime, [_ | _] = Args}, Res) ->
+    check_add_with_limit(Args, Res);
 postcondition(_State, {call, _Mod, add_cron_existing, [_Name | _]}, Res) ->
     Res =:= {error, already_exist};
 postcondition(_State, {call, _Mod, add_every_new, [_Name | _] = Args}, Res) ->
@@ -128,6 +135,16 @@ next_state(State, Res, {call, _Mod, add_cron_new, [Name, Spec, _MFA, {Start, End
     case is_expired(Spec, Start, End) of
         true -> State;
         false -> State#{Name => #{cron => new_cron(Args), worker => Res}}
+    end;
+next_state(State, Res, {call, _Mod, add_with_count, [Spec, MFA, _Count]}) ->
+    Name = make_ref(),
+    State#{Name => #{cron => new_cron([Name, Spec, MFA]), worker => Res}};
+next_state(State, Res, {call, _Mod, add_with_datetime, [Spec, MFA, {Start, End}]}) ->
+    case is_expired(Spec, Start, End) of
+        true -> State;
+        false ->
+            Name = make_ref(),
+            State#{Name => #{cron => new_cron([Name, Spec, MFA, {Start, End}]), worker => Res}}
     end;
 next_state(State, Res, {call, _Mod, add_every_new, [Name, _Spec, _MFA] = Args}) ->
     State#{Name => #{cron => new_every(Args), worker => Res}};
@@ -166,6 +183,10 @@ check_add_new([Name, _Spec, _MFA | _], {ok, Name}) -> true;
 check_add_new([_Name, Spec, _MFA, {StartTime, EndTime}], {error, already_ended}) ->
     is_expired(Spec, StartTime, EndTime).
 
+check_add_with_limit([_Spec, _MFA | _], {ok, _Name}) -> true;
+check_add_with_limit([Spec, _MFA, {StartTime, EndTime}], {error, already_ended}) ->
+    is_expired(Spec, StartTime, EndTime).
+
 is_expired(Spec, StartTime, EndTime) ->
     TZ = ecron_tick:get_time_zone(),
     {ok, Type, Job} = ecron:parse_spec(Spec),
@@ -177,6 +198,9 @@ add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_new(Name, Spec, MFA, {Start, End}) -> ecron:add(Name, Spec, MFA, Start, End).
 add_cron_existing(Name, Spec, MFA, {Start, End}) -> ecron:add(Name, Spec, MFA, Start, End).
+
+add_with_count(Spec, MFA, Count) -> ecron:add_with_count(Spec, MFA, Count).
+add_with_datetime(Spec, MFA, {Start, End}) -> ecron:add_with_datetime(Spec, MFA, Start, End).
 
 add_every_new(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
 add_every_existing(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).

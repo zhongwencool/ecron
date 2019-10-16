@@ -1,3 +1,4 @@
+%%% @private
 -module(ecron_sup).
 -behaviour(supervisor).
 -include("ecron.hrl").

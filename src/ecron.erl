@@ -1,7 +1,10 @@
 -module(ecron).
 -include("ecron.hrl").
 
--export([add/6, add/5, add/4, add/3]).
+-export([add/3, add/5, add/6]).
+-export([add_with_datetime/4, add_with_count/3]).
+-export([send_interval/3, send_interval/5, send_interval/7]).
+-export([send_after/3]).
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
@@ -9,7 +12,7 @@
 -export([valid_datetime/2]).
 
 -type name() :: term().
--type crontab_spec() :: crontab() | string() | binary() | 1..?MAX_TIMEOUT.
+-type crontab_spec() :: crontab() | string() | binary() | 1..4294967.
 
 -type crontab() :: #{second => '*' | [0..59 | {0..58, 1..59}, ...],
 minute => '*' | [0..59 | {0..58, 1..59}, ...],
@@ -40,23 +43,47 @@ next => [calendar:datetime()]}.
 -type parse_error() :: invalid_time | invalid_spec | month | day_of_month | day_of_week | hour | minute | second.
 -type start_datetime() :: unlimited | calendar:datetime().
 -type end_datetime() :: unlimited | calendar:datetime().
+-type option() :: {singleton, boolean()} |{max_count, pos_integer() | unlimited}.
+-type options() :: [option()].
 
+%% @equiv add(JobName, Spec, MFA, unlimited, unlimited, [])
 -spec add(name(), crontab_spec(), mfa()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA) ->
-    add(JobName, Spec, MFA, unlimited, unlimited, [{singleton, true}]).
+    add(JobName, Spec, MFA, unlimited, unlimited, []).
 
--spec add(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
-    {ok, name()} | {error, parse_error(), term()}.
-add(Spec, MFA, Start, End) ->
-    add(erlang:make_ref(), Spec, MFA, Start, End, [{singleton, true}]).
-
+%% @equiv add(JobName, Spec, MFA, Start, End, [])
 -spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA, Start, End) ->
-    add(JobName, Spec, MFA, Start, End, [{singleton, true}]).
+    add(JobName, Spec, MFA, Start, End, []).
 
--spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime(), proplists:proplists()) ->
+%% @equiv add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
+-spec add_with_count(crontab_spec(), mfa(), pos_integer()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
+    add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
+
+%% @equiv add(make_ref(), Spec, MFA, Start, End, [])
+-spec add_with_datetime(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+add_with_datetime(Spec, MFA, Start, End) ->
+    add(make_ref(), Spec, MFA, Start, End, []).
+
+%% @doc
+%% Add new crontab job. All jobs that exceed the limit will be automatically removed.
+%% <ul>
+%% <li>`JobName': The unique name of job, return `{error, already_exist}' if JobName is already exist.</li>
+%% <li>`Spec': A <a href="https://github.com/zhongwencool/ecron/blob/master/README.md#cron-expression-format"><tt>cron expression</tt></a> represents a set of times.</li>
+%% <li>`MFA': Spawn a process to run MFA when crontab is triggered.</li>
+%% <li>`Start': The job's next trigger time is Calculated from StartDatetime. Keeping `unlimited' if start from now on.</li>
+%% <li>`End': The job will be remove at end time. Keeping `unlimited' if never end.</li>
+%% <li>`Opts': The optional list of options. `{singleton, true}': Default job is singleton, Each task cannot be executed concurrently.
+%% `{max_count, pos_integer()}': This task can be run up to `MaxCount' times, default is `unlimited'.
+%% </li>
+%% </ul>
+%%
+-spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime(), options()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA, Start, End, Option) ->
     case valid_datetime(Start, End) of
@@ -73,21 +100,91 @@ add(JobName, Spec, MFA, Start, End, Option) ->
         false -> {error, invalid_time, {Start, End}}
     end.
 
+%% @doc
+%% Starts a timer which will send the message Msg to Dest when crontab is triggered.
+%% <ul>
+%% <li>Equivalent to `erlang:send_after/3' expect the `Time' format. </li>
+%% <li>If Dest is a pid() it has to be a pid() of a local process, dead or alive.</li>
+%% <li>The Time value can, in the current implementation, not be greater than <strong>4294967295</strong>. </li>
+%% <li>If Dest is an atom(), it is supposed to be the name of a registered process. The process referred to by the name is looked up at the time of delivery. No error is given if the name does not refer to a process.</li>
+%% <li>If Dest is a pid(), the timer will be automatically canceled if the process referred to by the pid() is not alive, or when the process exits.</li>
+%% <li><strong>Warning:</strong> Cancels a timer by `erlang:cancel_timer(Ref)' not `ecron:delete/1'.</li>
+%% </ul>
+-spec send_after(crontab_spec(), pid()|atom(), term()) ->
+    {ok, reference()} | {error, parse_error(), term()}.
+send_after(Spec, Pid, Message) ->
+    case parse_spec(Spec, 1) of
+        {ok, #{next := [Next]}} ->
+            NextMs = calendar:rfc3339_to_system_time(Next, [{'unit', second}]) * 1000,
+            Time = NextMs - erlang:system_time(millisecond),
+            {ok, erlang:send_after(Time, Pid, Message)};
+        Err -> Err
+    end.
+
+%% @equiv send_interval(make_ref(), Spec, Pid, Message, unlimited, unlimited, [])
+-spec send_interval(crontab_spec(), pid(), term()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+send_interval(Spec, Pid, Message) ->
+    send_interval(make_ref(), Spec, Pid, Message, unlimited, unlimited, []).
+
+%% @equiv send_interval(make_ref(), Spec, self(), Message, Start, End, Option)
+-spec send_interval(crontab_spec(), term(), start_datetime(), end_datetime(), options()) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+send_interval(Spec, Message, Start, End, Option) ->
+    send_interval(make_ref(), Spec, self(), Message, Start, End, Option).
+
+%% @doc
+%% Evaluates Pid ! Message repeatedly when crontab is triggered.
+%% (Pid can also be an atom of a registered name.)
+%% <ul>
+%% <li>`JobName': The unique name of job, return `{error, already_exist}' if the name is already exist.</li>
+%% <li>`Spec': A <a href="https://github.com/zhongwencool/ecron/blob/master/README.md#cron-expression-format"><tt>cron expression</tt></a> represents a set of times.</li>
+%% <li>`Pid': The target pid which receive message.</li>
+%% <li>`Message': Any erlang term.</li>
+%% <li>`Start': The job's next trigger time is Calculated from StartDatetime. Keeping `unlimited' if start from now on.</li>
+%% <li>`End': The job will be remove at end time. Keeping `unlimited' if never end.</li>
+%% <li>`Opts': The optional list of options. `{singleton, true}': Default job is singleton, Each task cannot be executed concurrently.
+%% `{max_count, pos_integer()}': This task can be run up to `MaxCount' times, default is `unlimited'.
+%% </li>
+%% </ul>
+%%
+-spec send_interval(name(), crontab_spec(), pid(), term(), start_datetime(),
+    end_datetime(), options()) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+send_interval(JobName, Spec, Pid, Message, Start, End, Option) ->
+    add(JobName, Spec, {erlang, send, [Pid, Message]}, Start, End, Option).
+
+%% @doc
+%% Delete an exist job, if the job is nonexistent, nothing happened.
 -spec delete(name()) -> ok.
 delete(JobName) -> ecron_tick:delete(JobName).
 
+%% @doc
+%% deactivate an exist job, if the job is nonexistent, return `{error, not_found}'.
+%% just freeze the job, use @see activate/1 to unfreeze job.
 -spec deactivate(name()) -> ok | {error, not_found}.
 deactivate(JobName) -> ecron_tick:deactivate(JobName).
 
--spec activate(name()) -> ok | {error, already_ended | not_found}.
+%% @doc
+%% activate an exist job, if the job is nonexistent, return `{error, not_found}'.
+%% if the job is already activate, nothing happened.
+%% the same effect as reinstall the job from now on.
+-spec activate(name()) -> ok | {error, not_found}.
 activate(JobName) -> ecron_tick:activate(JobName).
 
+%% @doc
+%% Statistic from an exist job.
+%% if the job is nonexistent, return `{error, not_found}'.
 -spec statistic(name()) -> {ok, statistic()} | {error, not_found}.
 statistic(JobName) -> ecron_tick:statistic(JobName).
 
+%% @doc
+%% Statistic for all jobs.
 -spec statistic() -> [statistic()].
 statistic() -> ecron_tick:statistic().
 
+%% @doc
+%% parse a crontab spec with next trigger time. For debug.
 -spec parse_spec(crontab_spec(), pos_integer()) ->
     {ok, #{type => cron | every, crontab => crontab_spec(), next => [calendar:rfc3339_string()]}} |
     {error, atom(), term()}.
@@ -102,7 +199,7 @@ parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
+%% @private
 valid_datetime(Start, End) ->
     case valid_datetime(Start) andalso valid_datetime(End) of
         true when Start =/= unlimited andalso End =/= unlimited ->
@@ -120,6 +217,7 @@ valid_datetime({Date, {H, M, S}}) ->
         calendar:valid_date(Date);
 valid_datetime(_ErrFormat) -> false.
 
+%% @private
 parse_spec("@yearly") -> parse_spec("0 0 1 1 *");    % Run once a year, midnight, Jan. 1st
 parse_spec("@annually") -> parse_spec("0 0 1 1 *");  % Same as @yearly
 parse_spec("@monthly") -> parse_spec("0 0 1 * *");   % Run once a month, midnight, first of month
