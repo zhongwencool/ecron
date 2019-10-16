@@ -8,7 +8,7 @@
 -export([predict_datetime/2]).
 
 -export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
--export([spawn_mfa/2]).
+-export([spawn_mfa/2, clear/0]).
 
 -record(state, {time_zone, max_timeout}).
 -record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
