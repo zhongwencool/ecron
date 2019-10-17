@@ -8,10 +8,10 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -record(state, {workday_job = undefined}).
--define(MonthlyJobName, monthly_email).
+-define(MonthlyJobName, monthly_staff).
 
 cancel_workday_staff() ->
-    gen_server:call(?MODULE, cancel_workday_email).
+    gen_server:call(?MODULE, cancel_workday_staff).
 
 cancel_monthly_staff() ->
     ecron:delete(?MonthlyJobName).
