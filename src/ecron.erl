@@ -1,8 +1,9 @@
 -module(ecron).
 -include("ecron.hrl").
 
--export([add/3, add/5, add/6]).
--export([add_with_datetime/4, add_with_count/3]).
+-export([add/3, add/6]).
+-export([add_with_datetime/4, add_with_datetime/5]).
+-export([add_with_count/3, add_with_count/4]).
 -export([send_interval/3, send_interval/5, send_interval/7]).
 -export([send_after/3]).
 -export([delete/1]).
@@ -52,23 +53,29 @@ next => [calendar:datetime()]}.
 add(JobName, Spec, MFA) ->
     add(JobName, Spec, MFA, unlimited, unlimited, []).
 
-%% @equiv add(JobName, Spec, MFA, Start, End, [])
--spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
-add(JobName, Spec, MFA, Start, End) ->
-    add(JobName, Spec, MFA, Start, End, []).
-
-%% @equiv add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
+%% @equiv add_with_count(make_ref(), Spec, MFA, RunCount).
 -spec add_with_count(crontab_spec(), mfa(), pos_integer()) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
-    add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
+    add_with_count(make_ref(), Spec, MFA, RunCount).
+
+%% @equiv add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
+-spec add_with_count(name(), crontab_spec(), mfa(), pos_integer()) ->
+    {ok, name()} | {error, parse_error(), term()}.
+add_with_count(JobName, Spec, MFA, RunCount) when is_integer(RunCount) ->
+    add(JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
 
 %% @equiv add(make_ref(), Spec, MFA, Start, End, [])
 -spec add_with_datetime(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_datetime(Spec, MFA, Start, End) ->
     add(make_ref(), Spec, MFA, Start, End, []).
+
+%% @equiv add(JobName, Spec, MFA, Start, End, [])
+-spec add_with_datetime(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
+    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+add_with_datetime(JobName, Spec, MFA, Start, End) ->
+    add(JobName, Spec, MFA, Start, End, []).
 
 %% @doc
 %% Add new crontab job. All jobs that exceed the limit will be automatically removed.
