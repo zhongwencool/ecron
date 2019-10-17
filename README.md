@@ -22,7 +22,7 @@ It offers:
 * Use gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 * Minimal overhead. ecron aims to keep its code base small.
 
-You can find more [Erlang Specific Usage](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Elixir Specific Usage]((https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir)).
+You can find more [Erlang Specific Usage](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Elixir Specific Usage](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
 
 ## Basic Usage 
 

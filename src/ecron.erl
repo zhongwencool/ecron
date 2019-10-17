@@ -53,7 +53,7 @@ next => [calendar:datetime()]}.
 add(JobName, Spec, MFA) ->
     add(JobName, Spec, MFA, unlimited, unlimited, []).
 
-%% @equiv add_with_count(make_ref(), Spec, MFA, RunCount).
+%% @equiv add_with_count(make_ref(), Spec, MFA, RunCount)
 -spec add_with_count(crontab_spec(), mfa(), pos_integer()) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
