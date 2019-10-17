@@ -1,7 +1,7 @@
 {application, ecron,
     [{description, "cron-like job scheduling library"},
-        {vsn, "0.2.0"},
-        {registered, [ecron_sup]},
+        {vsn, "0.3.0"},
+        {registered, [ecron_sup, ecron]},
         {mod, {ecron_app, []}},
         {applications, [kernel, stdlib]},
         {env, [

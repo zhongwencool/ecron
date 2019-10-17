@@ -196,16 +196,16 @@ is_expired(Spec, StartTime, EndTime) ->
 
 add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
-add_cron_new(Name, Spec, MFA, {Start, End}) -> ecron:add(Name, Spec, MFA, Start, End).
-add_cron_existing(Name, Spec, MFA, {Start, End}) -> ecron:add(Name, Spec, MFA, Start, End).
+add_cron_new(Name, Spec, MFA, {Start, End}) -> ecron:add_with_datetime(Name, Spec, MFA, Start, End).
+add_cron_existing(Name, Spec, MFA, {Start, End}) -> ecron:add_with_datetime(Name, Spec, MFA, Start, End).
 
 add_with_count(Spec, MFA, Count) -> ecron:add_with_count(Spec, MFA, Count).
 add_with_datetime(Spec, MFA, {Start, End}) -> ecron:add_with_datetime(Spec, MFA, Start, End).
 
 add_every_new(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
 add_every_existing(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
-add_every_new(Name, Ms, MFA, {Start, End}) -> ecron:add(Name, Ms, MFA, Start, End).
-add_every_existing(Name, Ms, MFA, {Start, End}) -> ecron:add(Name, Ms, MFA, Start, End).
+add_every_new(Name, Ms, MFA, {Start, End}) -> ecron:add_with_datetime(Name, Ms, MFA, Start, End).
+add_every_existing(Name, Ms, MFA, {Start, End}) -> ecron:add_with_datetime(Name, Ms, MFA, Start, End).
 
 delete_existing(Name) -> ecron:delete(Name).
 delete_unknown(Name) -> ecron:delete(Name).

@@ -22,6 +22,8 @@ It offers:
 * Use gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 * Minimal overhead. ecron aims to keep its code base small.
 
+You can find more [Erlang Specific Usage](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Elixir Specific Usage]((https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir)).
+
 ## Basic Usage 
 
 ```erlang
@@ -46,8 +48,8 @@ It offers:
          {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited},
          %% parallel job         
          {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
-     ]}
-]
+     ]}}
+].
 ```
 
 * When `time_zone` is `local`, current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
