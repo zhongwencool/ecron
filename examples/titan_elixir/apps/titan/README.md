@@ -1,21 +1,15 @@
-# Titan
+### Ecron Elixir Example
 
-**TODO: Add description**
-
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `titan` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:titan, "~> 0.1.0"}
-  ]
-end
+```shell script
+$ git clone https://github.com/zhongwencool/ecron.git
+$ cd example/titan_elixir
+$ mix deps.get
+$ iex -s Mix
+iex(1)> :ecron.statstictis()
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/titan](https://hexdocs.pm/titan).
-
+* [configure static job task](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/config/config.exs).
+* [stateless cron task](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/apps/titan/lib/titan/stateless_cron.ex).
+* [stateful cron task by :ecron.send_after](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/apps/titan/lib/titan/stateful_cron/send_after.ex).
+* [stateful cron task by :ecron.send_interval](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/apps/titan/lib/titan/stateful_cron/send_interval.ex).
+ 
