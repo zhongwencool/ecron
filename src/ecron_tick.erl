@@ -242,11 +242,11 @@ tick(State) ->
 tick_tick('$end_of_table', _Cur, _State) -> infinity;
 tick_tick({Due, _Name}, Cur, #state{max_timeout = MaxTimeout}) when Due > Cur ->
     min(Due - Cur, MaxTimeout);
-tick_tick(Key = {_, Name}, Cur, State) ->
+tick_tick(Key = {Due, Name}, Cur, State) ->
     #state{time_zone = TZ} = State,
     [Cron = #timer{singleton = Singleton, mfa = MFA, max_count = MaxCount, cur_count = CurCount}] = ets:lookup(?Timer, Key),
     ets:delete(?Timer, Key),
-    {Incr, CurPid} = maybe_spawn_worker(Singleton, Name, MFA),
+    {Incr, CurPid} = maybe_spawn_worker(Cur - Due < 1000, Singleton, Name, MFA),
     update_next_schedule(CurCount + Incr, MaxCount, Cron, Cur, Name, TZ, CurPid),
     tick(State).
 
@@ -478,18 +478,19 @@ predict_datetime(Job, TimeZone, Now, Start, End, Num, Acc) ->
 
 get_time_zone() -> application:get_env(?Ecron, time_zone, local).
 
-maybe_spawn_worker(_, Name, {erlang, send, Args}) ->
+maybe_spawn_worker(true, _, Name, {erlang, send, Args}) ->
     {1, spawn_mfa(Name, {erlang, send, Args})};
-maybe_spawn_worker(true, Name, MFA) ->
+maybe_spawn_worker(true, true, Name, MFA) ->
     {1, spawn(?MODULE, spawn_mfa, [Name, MFA])};
-maybe_spawn_worker(false, Name, MFA) ->
+maybe_spawn_worker(true, false, Name, MFA) ->
     spawn(?MODULE, spawn_mfa, [Name, MFA]),
     {1, false};
-maybe_spawn_worker(Pid, Name, MFA) when is_pid(Pid) ->
+maybe_spawn_worker(true, Pid, Name, MFA) when is_pid(Pid) ->
     case is_process_alive(Pid) of
         true -> {0, Pid};
         false -> {1, spawn(?MODULE, spawn_mfa, [Name, MFA])}
-    end.
+    end;
+maybe_spawn_worker(false, Singleton, _Name, _MFA) -> {0, Singleton}.
 
 pid_delete(Pid) ->
     TimerMatch = [{#timer{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],

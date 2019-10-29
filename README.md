@@ -56,8 +56,9 @@ You can find more [Erlang Specific Usage](https://github.com/zhongwencool/ecron/
 * When `time_zone` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0).
 * The job will be auto remove at the end of the time.
 * Default job is singleton, Each task cannot be executed concurrently. 
-* It handles not very radical when the system clock is altered, all workers only adjust system time by `{adjusting_time_second, 604800}`.  
-  Another way to take effect immediately on all jobs is by running `ecron:activate(Name)` manually. 
+* If the system clock suddenly alter a lot(such as close your laptop for two hours or modify system time manually),
+  it will skip the tasks which are supposed be running during the sudden lapse of time,
+  then recalculate the next running time by the latest system time.
 
 ## Advanced Usage 
 
