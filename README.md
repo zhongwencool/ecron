@@ -22,7 +22,23 @@ It offers:
 * Use gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 * Minimal overhead. ecron aims to keep its code base small.
 
-You can find more [Erlang Specific Usage](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Elixir Specific Usage](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
+You can find a collection of general best practices in [Full Erlang Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Full Elixir Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
+
+## Installation
+  
+**Erlang**
+ ```erlang
+  %% rebar.config
+  {deps, [observer_cli]}
+ ```
+
+**Elixir**
+ ```elixir
+  # mix.exs
+  def deps do
+    [{:ecron, "~> 0.3"}]
+  end
+```
 
 ## Basic Usage 
 
@@ -56,7 +72,7 @@ You can find more [Erlang Specific Usage](https://github.com/zhongwencool/ecron/
 * When `time_zone` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0).
 * The job will be auto remove at the end of the time.
 * Default job is singleton, Each task cannot be executed concurrently. 
-* If the system clock suddenly alter a lot(such as close your laptop for two hours or modify system time manually),
+* If the system clock suddenly alter a lot(such as sleep your laptop for two hours or modify system time manually),
   it will skip the tasks which are supposed be running during the sudden lapse of time,
   then recalculate the next running time by the latest system time.
 
