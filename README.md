@@ -75,6 +75,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
 * If the system clock suddenly alter a lot(such as sleep your laptop for two hours or modify system time manually),
   it will skip the tasks which are supposed be running during the sudden lapse of time,
   then recalculate the next running time by the latest system time.
+  You can also reload task manually by `ecron:reload().`
 
 ## Advanced Usage 
 

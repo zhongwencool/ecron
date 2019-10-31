@@ -1,5 +1,5 @@
 {application, ecron,
-    [{description, "cron-like job scheduling library"},
+    [{description, "cron-like/crontab job scheduling library"},
         {vsn, "0.3.0"},
         {registered, [ecron_sup, ecron]},
         {mod, {ecron_app, []}},

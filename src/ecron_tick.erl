@@ -5,6 +5,7 @@
 -export([add/2, delete/1]).
 -export([activate/1, deactivate/1]).
 -export([statistic/1, statistic/0]).
+-export([reload/0]).
 -export([predict_datetime/2]).
 
 -export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
@@ -28,6 +29,7 @@ activate(Name) -> gen_server:call(?Ecron, {activate, Name}, infinity).
 deactivate(Name) -> gen_server:call(?Ecron, {deactivate, Name}, infinity).
 get_next_schedule_time(Name) -> gen_server:call(?Ecron, {next_schedule_time, Name}, infinity).
 clear() -> gen_server:call(?Ecron, clear, infinity).
+reload() -> gen_server:cast(?Ecron, reload).
 
 statistic(Name) ->
     case ets:lookup(?Job, Name) of
