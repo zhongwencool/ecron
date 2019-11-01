@@ -9,23 +9,23 @@ defmodule TitanCronLogger do
   def detach(), do: :telemetry.detach(:ecron_metrics)
 
   def handle_event([:ecron, :activate], %{action_ms: time}, %{name: name, mfa: mfa}, _config) do
-    Logger.info("Activate ecron #{name} #{mfa}}  at #{time}")
+    Logger.info("Activate ecron #{inspect name} #{inspect mfa}}  at #{inspect time}")
   end
 
   def handle_event([:ecron, :deactivate], %{action_ms: time}, %{name: name}, _config) do
-    Logger.info("Deactivate ecron #{name} at #{time}")
+    Logger.info("Deactivate ecron #{inspect name} at #{inspect time}")
   end
 
   def handle_event([:ecron, :delete], %{action_ms: time}, %{name: name}, _config) do
-    Logger.info("Delete ecron #{name} at #{time}")
+    Logger.info("Delete ecron #{inspect name} at #{inspect time}")
   end
 
   def handle_event([:ecron, :success], %{run_microsecond: ms, run_result: res}, %{name: name, mfa: mfa}, _config) do
-    Logger.info("Ecron #{name}(#{mfa}}) completed in #{ms}} microsecond. result is #{res}}")
+    Logger.info("Ecron #{inspect name}(#{inspect mfa}}) completed in #{inspect ms}} microsecond. result is #{inspect res}}")
   end
 
   def handle_event([:ecron, :failure], %{run_microsecond: ms, run_result: res}, %{name: name, mfa: mfa}, _config) do
-    Logger.error("Ecron #{name}(#{mfa}}) CRASH in #{ms}} microsecond. result is #{res}}")
+    Logger.error("Ecron #{inspect name}(#{inspect mfa}}) CRASH in #{inspect ms}} microsecond. result is #{inspect res}}")
   end
 
 end
