@@ -9,6 +9,7 @@
 -export([delete/1]).
 -export([deactivate/1, activate/1]).
 -export([statistic/0, statistic/1]).
+-export([reload/0]).
 -export([parse_spec/2, parse_spec/1]).
 -export([valid_datetime/2]).
 
@@ -29,7 +30,7 @@ end_time => calendar:rfc3339_string() | unlimited,
 mfa => mfa(),
 type => cron | every}.
 
--type status() :: waiting | running | deactivate | activate | already_ended.
+-type status() :: deactivate | activate.
 
 -type statistic() :: #{ecron => ecron(),
 status => status(),
@@ -189,6 +190,11 @@ statistic(JobName) -> ecron_tick:statistic(JobName).
 %% Statistic for all jobs.
 -spec statistic() -> [statistic()].
 statistic() -> ecron_tick:statistic().
+
+%% @doc
+%% reload task manually, such as you should reload manually when the system time has alter a lot.
+-spec reload() -> ok.
+reload() -> ecron_tick:reload().
 
 %% @doc
 %% parse a crontab spec with next trigger time. For debug.

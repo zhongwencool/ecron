@@ -1,10 +1,10 @@
 %%% @private
 -module(ecron_tick).
 -include("ecron.hrl").
--include_lib("stdlib/include/ms_transform.hrl").
 -export([add/2, delete/1]).
 -export([activate/1, deactivate/1]).
 -export([statistic/1, statistic/0]).
+-export([reload/0]).
 -export([predict_datetime/2]).
 
 -export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
@@ -28,6 +28,7 @@ activate(Name) -> gen_server:call(?Ecron, {activate, Name}, infinity).
 deactivate(Name) -> gen_server:call(?Ecron, {deactivate, Name}, infinity).
 get_next_schedule_time(Name) -> gen_server:call(?Ecron, {next_schedule_time, Name}, infinity).
 clear() -> gen_server:call(?Ecron, clear, infinity).
+reload() -> gen_server:cast(?Ecron, reload).
 
 statistic(Name) ->
     case ets:lookup(?Job, Name) of
@@ -146,6 +147,7 @@ add_job(#{name := Name, mfa := MFA} = Job, TZ, Opts, NewJob) ->
     Pid = link_pid(MFA),
     JobRec = #job{status = activate, name = Name, job = Job, opts = NewOpts, link = Pid},
     Insert = ets:insert_new(?Job, JobRec),
+    telemetry:execute(?Activate, #{action_ms => current_millisecond()}, #{name => Name, mfa => MFA}),
     update_timer(Insert orelse NewJob, TZ, NewOpts, Job, current_millisecond(), Pid).
 
 activate_job(Name, TZ) ->
@@ -162,7 +164,9 @@ activate_job(Name, TZ) ->
 deactivate_job(Name) ->
     ets:select_delete(?Timer, ?MatchSpec(Name)),
     case ets:update_element(?Job, Name, {#job.status, deactivate}) of
-        true -> ok;
+        true ->
+            telemetry:execute(?Deactivate, #{action_ms => current_millisecond()}, #{name => Name}),
+            ok;
         false -> {error, not_found}
     end.
 
@@ -172,6 +176,7 @@ delete_job(Name) ->
         [] -> ok;
         [#job{link = Link}] ->
             unlink_pid(Link),
+            telemetry:execute(?Delete, #{action_ms => current_millisecond()}, #{name => Name}),
             ets:delete(?Job, Name)
     end.
 
@@ -209,23 +214,22 @@ millisecond_to_datetime(utc, Ms) -> calendar:system_time_to_universal_time(Ms, m
 
 spawn_mfa(Name, MFA) ->
     Start = erlang:monotonic_time(),
-    {OkInc, FailedInc, NewRes} =
+    {Event, OkInc, FailedInc, NewRes} =
         try
             case MFA of
                 {erlang, send, [Pid, Message]} ->
                     erlang:send(Pid, Message),
-                    {1, 0, ok};
-                {M, F, A} -> {1, 0, apply(M, F, A)};
-                {F, A} -> {1, 0, apply(F, A)}
+                    {?Success, 1, 0, ok};
+                {M, F, A} -> {?Success, 1, 0, apply(M, F, A)};
+                {F, A} -> {?Success, 1, 0, apply(F, A)}
             end
         catch
             Error:Reason:Stacktrace ->
-                logger:error("Job[~p] ~p with result:~n~p",
-                    [Name, Error, {Reason, Stacktrace}]),
-                {0, 1, {Error, Reason}}
+                {?Failure, 0, 1, {Error, Reason, Stacktrace}}
         end,
     End = erlang:monotonic_time(),
     Cost = erlang:convert_time_unit(End - Start, native, microsecond),
+    telemetry:execute(Event, #{run_microsecond => Cost, run_result => NewRes}, #{name => Name, mfa => MFA}),
     case ets:lookup(?Job, Name) of
         [] -> ok;
         [Job] ->

@@ -36,7 +36,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 0.3"}]
+    [{:ecron, "~> 0.4"}]
   end
 ```
 
@@ -75,6 +75,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
 * If the system clock suddenly alter a lot(such as sleep your laptop for two hours or modify system time manually),
   it will skip the tasks which are supposed be running during the sudden lapse of time,
   then recalculate the next running time by the latest system time.
+  You can also reload task manually by `ecron:reload().`
 
 ## Advanced Usage 
 
@@ -246,6 +247,10 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
     * Determine the next time in the future to run this command and place it back on the ets at that time value.
     
 Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.       
+
+## Telemetry
+Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
+such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
 
 ## Proper Test
 

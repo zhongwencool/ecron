@@ -13,7 +13,8 @@
     delete_existing/1, delete_unknown/1,
     deactivate_unknown/1, deactivate_existing/1,
     activate_unknown/1, activate_existing/1,
-    statistic_unknown/1, statistic_existing/1, statistic_all/0
+    statistic_unknown/1, statistic_existing/1, statistic_all/0,
+    reload/0
 ]).
 
 %%%%%%%%%%%%%%%%%%
@@ -56,7 +57,8 @@ command(State) ->
             {1, {call, ?MODULE, deactivate_unknown, [new_name(State)]}},
             {1, {call, ?MODULE, activate_unknown, [new_name(State)]}},
             {1, {call, ?MODULE, statistic_unknown, [new_name(State)]}},
-            {1, {call, ?MODULE, statistic_all, []}}
+            {1, {call, ?MODULE, statistic_all, []}},
+            {1, {call, ?MODULE, reload, []}}
         ] ++
             [{1, {call, ?MODULE, add_cron_existing, [exist_name(State), prop_ecron_spec:crontab_spec(), mfa()]}} || Empty] ++
             [{1, {call, ?MODULE, add_cron_existing, [exist_name(State), prop_ecron_spec:crontab_spec(), mfa(), datetime()]}} || Empty] ++
@@ -123,6 +125,8 @@ postcondition(_State, {call, _Mod, statistic_unknown, [_Name | _]}, Res) ->
     Res =:= {error, not_found};
 postcondition(State, {call, _Mod, statistic_existing, [Name | _]}, Res) ->
     valid_statistic(State, Name, Res);
+postcondition(_State, {call, _Mod, reload, []}, Res) ->
+    Res =:= ok;
 postcondition(State, {call, _Mod, statistic_all, []}, Res) ->
     erlang:length(Res) =:= maps:size(State).
 
@@ -219,6 +223,7 @@ activate_existing(Name) -> ecron:activate(Name).
 statistic_unknown(Name) -> ecron:statistic(Name).
 statistic_existing(Name) -> ecron:statistic(Name).
 statistic_all() -> ecron:statistic().
+reload() -> ecron:reload().
 
 valid_statistic(State, Name, {ok, Res}) ->
     case maps:find(Name, State) of
