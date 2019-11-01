@@ -36,7 +36,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 0.3"}]
+    [{:ecron, "~> 0.4"}]
   end
 ```
 
@@ -247,6 +247,10 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
     * Determine the next time in the future to run this command and place it back on the ets at that time value.
     
 Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.       
+
+## Telemetry
+Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
+such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
 
 ## Proper Test
 

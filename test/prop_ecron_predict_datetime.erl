@@ -152,30 +152,30 @@ shift_ms(Current, Ms) -> Current + Ms * 1000.
 shift_second(_, unlimited) -> unlimited;
 shift_second(Current, Ms) -> Current + Ms.
 
--define(AlreadyEnded, already_ended).
--define(Waiting, waiting).
--define(Running, running).
--define(Deactivate, deactivate).
--define(Activate, activate).
+-define(AlreadyEndedStatus, already_ended).
+-define(WaitingStatus, waiting).
+-define(RunningStatus, running).
+-define(DeactivateStatus, deactivate).
+-define(ActivateStatus, activate).
 
-in_range(_Current, unlimited, unlimited) -> ?Running;
+in_range(_Current, unlimited, unlimited) -> ?RunningStatus;
 in_range(Current, unlimited, End) ->
     case second_diff(End, Current) > 0 of
-        true -> ?AlreadyEnded;
-        false -> ?Running
+        true -> ?AlreadyEndedStatus;
+        false -> ?RunningStatus
     end;
 in_range(Current, Start, unlimited) ->
     case second_diff(Start, Current) < 0 of
-        true -> ?Deactivate;
-        false -> ?Running
+        true -> ?DeactivateStatus;
+        false -> ?RunningStatus
     end;
 in_range(Current, Start, End) ->
     case second_diff(End, Current) > 0 of
-        true -> ?AlreadyEnded;
+        true -> ?AlreadyEndedStatus;
         false ->
             case second_diff(Start, Current) < 0 of
-                true -> ?Deactivate;
-                false -> ?Running
+                true -> ?DeactivateStatus;
+                false -> ?RunningStatus
             end
     end.
 

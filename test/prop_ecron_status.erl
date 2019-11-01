@@ -74,7 +74,7 @@ prop_cron_apply_error() ->
                 MFA =:= RMFA andalso
                 Ok =:= 0 andalso
                 Failed =:= length(Result) andalso
-                lists:all(fun(R) -> R =:= {error, function_clause} end, Result)
+                lists:all(fun(R) -> {element(1, R), element(2, R)} =:= {error, function_clause} end, Result)
         end).
 
 prop_already_end(doc) -> "check already_end failed";

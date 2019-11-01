@@ -1,9 +1,9 @@
 {application, ecron,
     [{description, "cron-like/crontab job scheduling library"},
-        {vsn, "0.3.0"},
+        {vsn, "0.4.0"},
         {registered, [ecron_sup, ecron]},
         {mod, {ecron_app, []}},
-        {applications, [kernel, stdlib]},
+        {applications, [kernel, stdlib, telemetry]},
         {env, [
             {adjusting_time_second, 604800}, %7*24*3600
             {time_zone, local}, %% local or utc
