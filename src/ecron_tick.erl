@@ -7,15 +7,14 @@
 -export([reload/0]).
 -export([predict_datetime/2]).
 
--export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
+-export([start_link/1, stop/2, handle_call/3, handle_info/2, init/1, handle_cast/2]).
 -export([spawn_mfa/2, clear/0]).
 
--record(state, {time_zone, max_timeout}).
+-record(state, {time_zone, max_timeout, global_jobs = [], timer}).
 -record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
     link = undefined, result = [], run_microsecond = []}).
 -record(timer, {key, name, cur_count = 0, singleton, type, spec, mfa, link,
     start_sec = unlimited, end_sec = unlimited, max_count = unlimited}).
--define(Timer, ecron_timer).
 
 -define(MAX_SIZE, 16).
 -define(SECONDS_FROM_0_TO_1970, 719528 * 86400).
@@ -43,46 +42,69 @@ statistic() ->
 predict_datetime(Job, Num) ->
     predict_datetime(activate, Job, unlimited, unlimited, Num, get_time_zone()).
 
-start_link(Name) ->
-    gen_server:start_link(Name, ?MODULE, [], []).
+start_link(Name) -> gen_server:start_link(Name, ?MODULE, [Name], []).
 
-init([]) ->
+stop(Name, Reason) ->
+    try
+        gen_server:stop(Name, Reason, 5100)
+    catch _:_ ->
+        ok
+    end.
+
+init([{Type, _}]) ->
     erlang:process_flag(trap_exit, true),
     TZ = get_time_zone(),
-    ?Timer = ets:new(?Timer, [named_table, ordered_set, private, {keypos, #timer.key}]),
+    Timer = ets:new(ecron_timer, [ordered_set, private, {keypos, #timer.key}]),
     MaxTimeout = application:get_env(?Ecron, adjusting_time_second, 7 * 24 * 3600) * 1000,
-    case reload_crontab() of
-        ok ->
-            [begin add_job(Job, TZ, Opts, true)
+    init(Type, TZ, MaxTimeout, Timer).
+
+init(local, TZ, MaxTimeout, Timer) ->
+    case parse_crontab(application:get_env(?Ecron, local_jobs, [])) of
+        {ok, Jobs} ->
+            [begin ets:insert_new(?Job, Job) end || Job <- Jobs],
+            [begin add_job(Job, TZ, Opts, true, Timer)
              end || #job{job = Job, opts = Opts, status = activate} <- ets:tab2list(?Job)],
-            State = #state{
-                max_timeout = MaxTimeout,
-                time_zone = TZ},
+            State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer = Timer},
+            {ok, State, next_timeout(State)};
+        Reason -> Reason
+    end;
+init(global, TZ, MaxTimeout, Timer) ->
+    case parse_crontab(application:get_env(?Ecron, global_jobs, [])) of
+        {ok, Jobs} ->
+            Now = current_millisecond(),
+            [begin
+                 #{name := Name, mfa := MFA} = Job,
+                 NewOpts = valid_opts(Opts),
+                 Pid = link_pid(MFA),
+                 telemetry:execute(?Activate, #{action_ms => Now}, #{name => Name, mfa => MFA}),
+                 update_timer(true, TZ, NewOpts, Job, Now, Pid, Timer)
+             end || #job{job = Job, opts = Opts} <- Jobs],
+            State = #state{max_timeout = MaxTimeout, time_zone = TZ, global_jobs = Jobs, timer = Timer},
             {ok, State, next_timeout(State)};
         Reason -> Reason
     end.
 
-handle_call({add, Job, Options}, _From, #state{time_zone = TZ} = State) ->
-    {reply, add_job(Job, TZ, Options, false), State, tick(State)};
+handle_call({add, Job, Options}, _From, #state{time_zone = TZ, timer = TimerTab} = State) ->
+    {reply, add_job(Job, TZ, Options, false, TimerTab), State, tick(State)};
 
-handle_call({delete, Name}, _From, State) ->
-    delete_job(Name),
+handle_call({delete, Name}, _From, State = #state{timer = TimerTab}) ->
+    delete_job(Name, TimerTab),
     {reply, ok, State, next_timeout(State)};
 
-handle_call({activate, Name}, _From, #state{time_zone = TZ} = State) ->
-    {reply, activate_job(Name, TZ), State, tick(State)};
+handle_call({activate, Name}, _From, #state{time_zone = TZ, timer = TimerTab} = State) ->
+    {reply, activate_job(Name, TZ, TimerTab), State, tick(State)};
 
-handle_call({deactivate, Name}, _From, State) ->
-    {reply, deactivate_job(Name), State, next_timeout(State)};
+handle_call({deactivate, Name}, _From, State = #state{timer = TimerTab}) ->
+    {reply, deactivate_job(Name, TimerTab), State, next_timeout(State)};
 
-handle_call({next_schedule_time, Name}, _From, State) ->
+handle_call({next_schedule_time, Name}, _From, State = #state{timer = Timer}) ->
     %% P = ets:fun2ms(fun(#timer{name = N, key = {Time, _}}) when N =:= Name -> Time end),
     P = [{#timer{key = {'$1', '_'}, name = '$2', _ = '_'}, [{'=:=', '$2', {const, Name}}], ['$1']}],
-    Res = ets:select(?Timer, P),
+    Res = ets:select(Timer, P),
     {reply, Res, State, next_timeout(State)};
 
-handle_call(clear, _From, State) ->
-    ets:delete_all_objects(?Timer),
+handle_call(clear, _From, State = #state{timer = Timer}) ->
+    ets:delete_all_objects(Timer),
     ets:delete_all_objects(?Job),
     {reply, ok, State, next_timeout(State)};
 
@@ -92,8 +114,8 @@ handle_call(_Unknown, _From, State) ->
 handle_info(timeout, State) ->
     {noreply, State, tick(State)};
 
-handle_info({'EXIT', Pid, _Reason}, State) ->
-    pid_delete(Pid),
+handle_info({'EXIT', Pid, _Reason}, State = #state{timer = TimerTab}) ->
+    pid_delete(Pid, TimerTab),
     {noreply, State, next_timeout(State)};
 
 handle_info(_Unknown, State) ->
@@ -105,25 +127,20 @@ handle_cast(_Unknown, State) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-reload_crontab() ->
-    reload_crontab(application:get_env(ecron, jobs, [])).
+parse_crontab(Jobs) ->
+    parse_crontab(Jobs, []).
 
-reload_crontab([]) -> ok;
-reload_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs]) ->
-    reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, unlimited, unlimited, []} | Jobs]);
-reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs]) ->
-    reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, []} | Jobs]);
-reload_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs]) ->
+parse_crontab([], Acc) -> {ok, Acc};
+parse_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs], Acc) ->
+    parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, unlimited, unlimited, []} | Jobs], Acc);
+parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs], Acc) ->
+    parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, []} | Jobs], Acc);
+parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs], Acc) ->
     case parse_job(Name, Spec, MFA, Start, End, Opts) of
-        {ok, Job} ->
-            case ets:lookup(?Job, Name) of
-                [] -> ets:insert(?Job, Job);
-                _ -> ok
-            end,
-            reload_crontab(Jobs);
+        {ok, Job} -> parse_crontab(Jobs, [Job | Acc]);
         {error, Field, Reason} -> {stop, lists:flatten(io_lib:format("~p: ~p", [Field, Reason]))}
     end;
-reload_crontab([L | _]) -> {stop, L}.
+parse_crontab([L | _], _Acc) -> {stop, L}.
 
 parse_job(JobName, Spec, MFA, Start, End, Opts) ->
     case ecron:valid_datetime(Start, End) of
@@ -142,27 +159,28 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
             {error, invalid_time, {Start, End}}
     end.
 
-add_job(#{name := Name, mfa := MFA} = Job, TZ, Opts, NewJob) ->
+add_job(#{name := Name, mfa := MFA} = Job, TZ, Opts, NewJob, TimerTab) ->
     NewOpts = valid_opts(Opts),
     Pid = link_pid(MFA),
     JobRec = #job{status = activate, name = Name, job = Job, opts = NewOpts, link = Pid},
     Insert = ets:insert_new(?Job, JobRec),
-    telemetry:execute(?Activate, #{action_ms => current_millisecond()}, #{name => Name, mfa => MFA}),
-    update_timer(Insert orelse NewJob, TZ, NewOpts, Job, current_millisecond(), Pid).
+    Now = current_millisecond(),
+    telemetry:execute(?Activate, #{action_ms => Now}, #{name => Name, mfa => MFA}),
+    update_timer(Insert orelse NewJob, TZ, NewOpts, Job, Now, Pid, TimerTab).
 
-activate_job(Name, TZ) ->
+activate_job(Name, TZ, TimerTab) ->
     case ets:lookup(?Job, Name) of
         [] -> {error, not_found};
         [#job{job = Job, opts = Opts}] ->
-            delete_job(Name),
-            case add_job(Job, TZ, Opts, false) of
+            delete_job(Name, TimerTab),
+            case add_job(Job, TZ, Opts, false, TimerTab) of
                 {ok, Name} -> ok;
                 Err -> Err
             end
     end.
 
-deactivate_job(Name) ->
-    ets:select_delete(?Timer, ?MatchSpec(Name)),
+deactivate_job(Name, Timer) ->
+    ets:select_delete(Timer, ?MatchSpec(Name)),
     case ets:update_element(?Job, Name, {#job.status, deactivate}) of
         true ->
             telemetry:execute(?Deactivate, #{action_ms => current_millisecond()}, #{name => Name}),
@@ -170,18 +188,18 @@ deactivate_job(Name) ->
         false -> {error, not_found}
     end.
 
-delete_job(Name) ->
-    ets:select_delete(?Timer, ?MatchSpec(Name)),
+delete_job(Name, Timer) ->
+    ets:select_delete(Timer, ?MatchSpec(Name)),
+    telemetry:execute(?Delete, #{action_ms => current_millisecond()}, #{name => Name}),
     case ets:lookup(?Job, Name) of
         [] -> ok;
         [#job{link = Link}] ->
             unlink_pid(Link),
-            telemetry:execute(?Delete, #{action_ms => current_millisecond()}, #{name => Name}),
             ets:delete(?Job, Name)
     end.
 
-update_timer(false, _, _, _, _, _) -> {error, already_exist};
-update_timer(true, TZ, Opts, Job, Now, LinkPid) ->
+update_timer(false, _, _, _, _, _, _) -> {error, already_exist};
+update_timer(true, TZ, Opts, Job, Now, LinkPid, TimerTab) ->
     Singleton = proplists:get_value(singleton, Opts),
     MaxCount = proplists:get_value(max_count, Opts),
     #{name := Name, crontab := Spec, type := Type, mfa := MFA,
@@ -193,10 +211,10 @@ update_timer(true, TZ, Opts, Job, Now, LinkPid) ->
             Timer = #timer{key = {NextSec, Name}, singleton = Singleton,
                 name = Name, type = Type, spec = Spec, max_count = MaxCount,
                 mfa = MFA, start_sec = Start, end_sec = End, link = LinkPid},
-            ets:insert(?Timer, Timer),
+            ets:insert(TimerTab, Timer),
             {ok, Name};
         {error, already_ended} = Err ->
-            delete_job(Name),
+            delete_job(Name, TimerTab),
             Err
     end.
 
@@ -240,29 +258,29 @@ spawn_mfa(Name, MFA) ->
             ets:update_element(?Job, Name, Elements)
     end.
 
-tick(State) ->
-    tick_tick(ets:first(?Timer), current_millisecond(), State).
+tick(State = #state{timer = TimerTab}) ->
+    tick_tick(ets:first(TimerTab), current_millisecond(), State).
 
 tick_tick('$end_of_table', _Cur, _State) -> infinity;
 tick_tick({Due, _Name}, Cur, #state{max_timeout = MaxTimeout}) when Due > Cur ->
     min(Due - Cur, MaxTimeout);
 tick_tick(Key = {Due, Name}, Cur, State) ->
-    #state{time_zone = TZ} = State,
-    [Cron = #timer{singleton = Singleton, mfa = MFA, max_count = MaxCount, cur_count = CurCount}] = ets:lookup(?Timer, Key),
-    ets:delete(?Timer, Key),
+    #state{time_zone = TZ, timer = TimerTab} = State,
+    [Cron = #timer{singleton = Singleton, mfa = MFA, max_count = MaxCount, cur_count = CurCount}] = ets:lookup(TimerTab, Key),
+    ets:delete(TimerTab, Key),
     {Incr, CurPid} = maybe_spawn_worker(Cur - Due < 1000, Singleton, Name, MFA),
-    update_next_schedule(CurCount + Incr, MaxCount, Cron, Cur, Name, TZ, CurPid),
+    update_next_schedule(CurCount + Incr, MaxCount, Cron, Cur, Name, TZ, CurPid, TimerTab),
     tick(State).
 
-update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid) -> delete_job(Name);
-update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid) ->
+update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid, TimerTab) -> delete_job(Name, TimerTab);
+update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid, TimerTab) ->
     #timer{type = Type, start_sec = Start, end_sec = End, spec = Spec} = Cron,
     case next_schedule_millisecond(Type, Spec, TZ, Cur, Start, End) of
         {ok, Next} ->
             NextTimer = Cron#timer{key = {Next, Name}, singleton = CurPid, cur_count = Count},
-            ets:insert(?Timer, NextTimer);
+            ets:insert(TimerTab, NextTimer);
         {error, already_ended} ->
-            delete_job(Name)
+            delete_job(Name, TimerTab)
     end.
 
 next_schedule_millisecond(every, Sec, _TimeZone, Now, Start, End) ->
@@ -426,8 +444,8 @@ spec_min([{Key, Value} | Rest], Acc) ->
         end,
     spec_min(Rest, NewAcc).
 
-next_timeout(#state{max_timeout = MaxTimeout}) ->
-    case ets:first(?Timer) of
+next_timeout(#state{max_timeout = MaxTimeout, timer = TimerTab}) ->
+    case ets:first(TimerTab) of
         '$end_of_table' -> infinity;
         {Due, _} -> min(max(Due - current_millisecond(), 0), MaxTimeout)
     end.
@@ -496,10 +514,10 @@ maybe_spawn_worker(true, Pid, Name, MFA) when is_pid(Pid) ->
     end;
 maybe_spawn_worker(false, Singleton, _Name, _MFA) -> {0, Singleton}.
 
-pid_delete(Pid) ->
+pid_delete(Pid, TimerTab) ->
     TimerMatch = [{#timer{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],
     JobMatch = [{#job{link = '$1', _ = '_'}, [], [{'=:=', '$1', {const, Pid}}]}],
-    ets:select_delete(?Timer, TimerMatch),
+    ets:select_delete(TimerTab, TimerMatch),
     ets:select_delete(?Job, JobMatch).
 
 valid_opts(Opts) ->
