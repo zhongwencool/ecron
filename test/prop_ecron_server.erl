@@ -25,7 +25,7 @@ prop_server(opts) -> [{numtests, 7000}].
 prop_server() ->
     ?FORALL(Cmds, commands(?MODULE),
         begin
-            application:set_env(ecron, jobs, []),
+            application:set_env(ecron, local_jobs, []),
             application:ensure_all_started(ecron),
             ecron_tick:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),

@@ -194,7 +194,9 @@ statistic() -> ecron_tick:statistic().
 %% @doc
 %% reload task manually, such as you should reload manually when the system time has alter a lot.
 -spec reload() -> ok.
-reload() -> ecron_tick:reload().
+reload() ->
+    ecron_tick:reload(),
+    gen_server:cast({global, ecron_global}, reload).
 
 %% @doc
 %% parse a crontab spec with next trigger time. For debug.
