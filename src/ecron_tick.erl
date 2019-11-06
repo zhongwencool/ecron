@@ -46,10 +46,10 @@ statistic(Name) ->
 statistic() ->
     TZ = get_time_zone(),
     Local =
-        [begin
-             Next = get_next_schedule_time(Name),
-             job_to_statistic(Job, TZ, Next)
-         end || Job = #job{name = Name} <- ets:tab2list(?Job)],
+        ets:foldl(fun(Job = #job{name = Name}, Acc) ->
+            Next = get_next_schedule_time(Name),
+            [job_to_statistic(Job, TZ, Next) | Acc]
+                  end, [], ?Job),
     Global =
         try
             gen_server:call({global, ?Ecron}, statistic)
@@ -129,7 +129,7 @@ handle_cast(_Unknown, State) ->
 %%%===================================================================
 
 init(local, TZ, MaxTimeout, Tab) ->
-    case parse_crontab(local_jobs()) of
+    case parse_crontab(local_jobs(), []) of
         {ok, Jobs} ->
             [begin ets:insert_new(?Job, Job) end || Job <- Jobs],
             [begin add_job(?Job, Tab, Job, TZ, Opts, true)
@@ -139,7 +139,7 @@ init(local, TZ, MaxTimeout, Tab) ->
         Reason -> Reason
     end;
 init(global, TZ, MaxTimeout, Tab) ->
-    case parse_crontab(global_jobs()) of
+    case parse_crontab(global_jobs(), []) of
         {ok, Jobs} ->
             ?GlobalJob = ets:new(?GlobalJob, [named_table, set, public, {keypos, 2}]),
             [begin add_job(?GlobalJob, Tab, Job, TZ, Opts, true)
@@ -148,9 +148,6 @@ init(global, TZ, MaxTimeout, Tab) ->
             {ok, State, next_timeout(State)};
         Reason -> Reason
     end.
-
-parse_crontab(Jobs) ->
-    parse_crontab(Jobs, []).
 
 parse_crontab([], Acc) -> {ok, Acc};
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs], Acc) ->
@@ -494,7 +491,7 @@ job_to_statistic(Job, TimeZone, Now) ->
         next => predict_datetime(Status, JobSpec, Start, End, ?MAX_SIZE, TimeZone, Now),
         start_time => to_rfc3339(datetime_to_millisecond(TimeZone, StartTime)),
         end_time => to_rfc3339(datetime_to_millisecond(TimeZone, EndTime)),
-        results => Res, run_microsecond => RunMs}.
+        node => node(), results => Res, run_microsecond => RunMs}.
 
 predict_datetime(deactivate, _, _, _, _, _, _) -> [];
 predict_datetime(activate, #{type := every, crontab := Sec} = Job, Start, End, Num, TimeZone, Now) ->
