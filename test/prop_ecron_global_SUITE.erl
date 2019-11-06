@@ -17,7 +17,7 @@ suite() ->
 
 all() ->
     [
-        basic, quorum, transfer
+        basic, quorum, transfer, error_config
     ].
 
 groups() -> [].
@@ -97,11 +97,19 @@ transfer(_Config) ->
     Pid2 = global:whereis_name(ecron),
     true = is_pid(Pid2),
     true = (Pid2 =/= Pid1),
-    {ok, #{node := Node2}} = ecron:statistic(global_job),
+    {error, not_found} = ecron:statistic(no_found),
+    [#{node := Node2}] = ecron:statistic(),
     true = Node1 =/= Node2,
     stop_slave(?Slave1),
     stop_slave(?Slave2),
     stop_master(),
+    ok.
+
+error_config(_Config) ->
+    application:set_env(ecron, global_jobs, [{global_job, "* */10 * * * * *", {io_lib, format, ["error"]}}]),
+    ok = application:start(ecron),
+    undefined = global:whereis_name(ecron),
+    application:stop(ecron),
     ok.
 
 -define(Env(Quorum), [
@@ -112,7 +120,7 @@ transfer(_Config) ->
     {global_jobs, [{global_job, "*/10 * * * * *", {io_lib, format, ["Runs on 0, 15, 30, 45 seconds~n"]}}]}
 ]).
 
-start_master(Quorum)when is_integer(Quorum) ->
+start_master(Quorum) when is_integer(Quorum) ->
     start_master(?Env(Quorum));
 start_master(Env) ->
     ok = set_app_env(Env),

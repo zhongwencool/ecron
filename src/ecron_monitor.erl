@@ -23,8 +23,10 @@ handle_info(Reason, State) ->
     QuorumSize = application:get_env(ecron, cluster_quorum_size, 1),
     case erlang:length(nodes([this, visible])) >= QuorumSize of
         true ->
-            {ok, Pid} = ecron_sup:start_global(Reason),
-            link(Pid);
+            case ecron_sup:start_global(Reason) of
+                {ok, Pid} -> link(Pid);
+                Err -> logger:error("Ecron Global Spec Error:~p", [Err])
+            end;
         false -> ecron_sup:stop_global(Reason)
     end,
     {noreply, State}.

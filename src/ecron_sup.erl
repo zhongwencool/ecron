@@ -28,7 +28,8 @@ start_global(Reason) ->
             telemetry:execute(?GlobalUp, Meta, #{node => node()}),
             {ok, Pid};
         {error, {already_started, Pid}} -> {ok, Pid};
-        {error, {{already_started, Pid}, _}} -> {ok, Pid}
+        {error, {{already_started, Pid}, _}} -> {ok, Pid};
+        Err -> Err
     end.
 
 stop_global(Reason) ->
