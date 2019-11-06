@@ -3,7 +3,7 @@
 -behaviour(supervisor).
 -include("ecron.hrl").
 
--export([start_global/0, stop_global/0]).
+-export([start_global/1, stop_global/1]).
 -export([start_link/0, init/1]).
 
 -define(LOCAL_WORKER, ecron_tick).
@@ -13,22 +13,27 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_global() ->
+start_global(Reason) ->
     case supervisor:start_child(?MODULE,
         #{
             id => ?GLOBAL_WORKER,
-            start => {ecron_tick, start_link, [{global, ?GLOBAL_WORKER}]},
+            start => {ecron_tick, start_link, [{global, ?Ecron}]},
             restart => temporary,
             shutdown => 1000,
             type => worker,
             modules => [?GLOBAL_WORKER]
         }) of
-        {ok, Pid} -> {ok, Pid};
+        {ok, Pid} ->
+            Meta = #{action_ms => erlang:system_time(millisecond), reason => Reason},
+            telemetry:execute(?GlobalUp, Meta, #{node => node()}),
+            {ok, Pid};
         {error, {already_started, Pid}} -> {ok, Pid};
         {error, {{already_started, Pid}, _}} -> {ok, Pid}
     end.
 
-stop_global() ->
+stop_global(Reason) ->
+    Meta = #{action_ms => erlang:system_time(millisecond), reason => Reason},
+    telemetry:execute(?GlobalDown, Meta, #{node => node()}),
     supervisor:terminate_child(?MODULE, ?GLOBAL_WORKER).
 
 init([]) ->

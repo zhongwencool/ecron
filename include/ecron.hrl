@@ -7,3 +7,5 @@
 -define(Activate, [ecron, activate]).
 -define(Deactivate, [ecron, deactivate]).
 -define(Delete, [ecron, delete]).
+-define(GlobalUp, [ecron, global, up]).
+-define(GlobalDown, [ecron, global, down]).

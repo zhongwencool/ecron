@@ -19,14 +19,12 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-handle_info(Info, State) ->
+handle_info(Reason, State) ->
     QuorumSize = application:get_env(ecron, cluster_quorum_size, 1),
-    io:format("~p ~p ~n", [Info, QuorumSize]),
     case erlang:length(nodes([this, visible])) >= QuorumSize of
         true ->
-            {ok, Pid} = ecron_sup:start_global(),
+            {ok, Pid} = ecron_sup:start_global(Reason),
             link(Pid);
-        false -> ecron_sup:stop_global()
+        false -> ecron_sup:stop_global(Reason)
     end,
     {noreply, State}.
-
