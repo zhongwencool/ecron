@@ -24,7 +24,7 @@
                 %% {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited}
             ]},
             {global_jobs, [
-                {crontab_job, "*/10 * * * * *", {io, format, ["Runs on 0, 15, 30, 45 seconds~n"]}}
+                %% {global_job, "*/10 * * * * *", {io, format, ["Runs on 0, 15, 30, 45 seconds~n"]}}
             ]}
         ]},
         {modules, []},

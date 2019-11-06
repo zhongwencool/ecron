@@ -10,7 +10,7 @@
 -export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
 -export([spawn_mfa/3, clear/0]).
 
--record(state, {time_zone, max_timeout, timer, job_tab = ?Job}).
+-record(state, {time_zone, max_timeout, timer_tab, job_tab = ?Job}).
 -record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
     link = undefined, result = [], run_microsecond = []}).
 -record(timer, {key, name, cur_count = 0, singleton, type, spec, mfa, link,
@@ -31,10 +31,7 @@ reload() -> gen_server:cast(?Ecron, reload).
 
 statistic(Name) ->
     case ets:lookup(?Job, Name) of
-        [Job] ->
-            TZ = get_time_zone(),
-            Next = get_next_schedule_time(Name),
-            {ok, job_to_statistic(Job, TZ, Next)};
+        [Job] -> {ok, job_to_statistic(Job)};
         [] ->
             try
                 gen_server:call({global, ?Ecron}, {statistic, Name})
@@ -44,12 +41,7 @@ statistic(Name) ->
     end.
 
 statistic() ->
-    TZ = get_time_zone(),
-    Local =
-        ets:foldl(fun(Job = #job{name = Name}, Acc) ->
-            Next = get_next_schedule_time(Name),
-            [job_to_statistic(Job, TZ, Next) | Acc]
-                  end, [], ?Job),
+    Local = ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], ?Job),
     Global =
         try
             gen_server:call({global, ?Ecron}, statistic)
@@ -73,37 +65,37 @@ init([{Type, _}]) ->
     init(Type, TZ, MaxTimeout, Tab).
 
 handle_call({add, Job, Options}, _From, State) ->
-    #state{time_zone = TZ, timer = Tab, job_tab = JobTab} = State,
+    #state{time_zone = TZ, timer_tab = Tab, job_tab = JobTab} = State,
     {reply, add_job(JobTab, Tab, Job, TZ, Options, false), State, tick(State)};
 
-handle_call({delete, Name}, _From, State = #state{timer = Tab, job_tab = JobTab}) ->
+handle_call({delete, Name}, _From, State = #state{timer_tab = Tab, job_tab = JobTab}) ->
     delete_job(JobTab, Tab, Name),
     {reply, ok, State, next_timeout(State)};
 
 handle_call({activate, Name}, _From, State) ->
-    #state{job_tab = JobTab, time_zone = TZ, timer = TimerTab} = State,
+    #state{job_tab = JobTab, time_zone = TZ, timer_tab = TimerTab} = State,
     {reply, activate_job(JobTab, Name, TZ, TimerTab), State, tick(State)};
 
 handle_call({deactivate, Name}, _From, State) ->
-    #state{timer = TimerTab, job_tab = JobTab} = State,
+    #state{timer_tab = TimerTab, job_tab = JobTab} = State,
     {reply, deactivate_job(JobTab, Name, TimerTab), State, next_timeout(State)};
 
 handle_call({statistic, Name}, _From, State) ->
-    Res = do_statistic(Name, State),
+    Res = job_to_statistic(Name, State),
     {reply, Res, State, next_timeout(State)};
 
-handle_call(statistic, _From, State = #state{timer = Timer}) ->
+handle_call(statistic, _From, State = #state{timer_tab = Timer}) ->
     Res =
         ets:foldl(fun(#timer{name = Name}, Acc) ->
-            {ok, Item} = do_statistic(Name, State),
+            {ok, Item} = job_to_statistic(Name, State),
             [Item | Acc]
                   end, [], Timer),
     {reply, Res, State, next_timeout(State)};
 
-handle_call({next_schedule_time, Name}, _From, State = #state{timer = Timer}) ->
+handle_call({next_schedule_time, Name}, _From, State = #state{timer_tab = Timer}) ->
     {reply, get_next_schedule_time(Timer, Name), State, next_timeout(State)};
 
-handle_call(clear, _From, State = #state{timer = Timer}) ->
+handle_call(clear, _From, State = #state{timer_tab = Timer}) ->
     ets:delete_all_objects(Timer),
     ets:delete_all_objects(?Job),
     {reply, ok, State, next_timeout(State)};
@@ -114,7 +106,7 @@ handle_call(_Unknown, _From, State) ->
 handle_info(timeout, State) ->
     {noreply, State, tick(State)};
 
-handle_info({'EXIT', Pid, _Reason}, State = #state{timer = TimerTab}) ->
+handle_info({'EXIT', Pid, _Reason}, State = #state{timer_tab = TimerTab}) ->
     pid_delete(Pid, TimerTab),
     {noreply, State, next_timeout(State)};
 
@@ -134,7 +126,7 @@ init(local, TZ, MaxTimeout, Tab) ->
             [begin ets:insert_new(?Job, Job) end || Job <- Jobs],
             [begin add_job(?Job, Tab, Job, TZ, Opts, true)
              end || #job{job = Job, opts = Opts, status = activate} <- ets:tab2list(?Job)],
-            State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer = Tab, job_tab = ?Job},
+            State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer_tab = Tab, job_tab = ?Job},
             {ok, State, next_timeout(State)};
         Reason -> Reason
     end;
@@ -144,7 +136,7 @@ init(global, TZ, MaxTimeout, Tab) ->
             ?GlobalJob = ets:new(?GlobalJob, [named_table, set, public, {keypos, 2}]),
             [begin add_job(?GlobalJob, Tab, Job, TZ, Opts, true)
              end || #job{job = Job, opts = Opts, status = activate} <- Jobs],
-            State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer = Tab, job_tab = ?GlobalJob},
+            State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer_tab = Tab, job_tab = ?GlobalJob},
             {ok, State, next_timeout(State)};
         Reason -> Reason
     end.
@@ -277,14 +269,14 @@ spawn_mfa(JobTab, Name, MFA) ->
             ets:update_element(JobTab, Name, Elements)
     end.
 
-tick(State = #state{timer = TimerTab}) ->
+tick(State = #state{timer_tab = TimerTab}) ->
     tick_tick(ets:first(TimerTab), current_millisecond(), State).
 
 tick_tick('$end_of_table', _Cur, _State) -> infinity;
 tick_tick({Due, _Name}, Cur, #state{max_timeout = MaxTimeout}) when Due > Cur ->
     min(Due - Cur, MaxTimeout);
 tick_tick(Key = {Due, Name}, Cur, State) ->
-    #state{time_zone = TZ, timer = TimerTab, job_tab = JobTab} = State,
+    #state{time_zone = TZ, timer_tab = TimerTab, job_tab = JobTab} = State,
     [Cron = #timer{singleton = Singleton, mfa = MFA, max_count = MaxCount, cur_count = CurCount}] = ets:lookup(TimerTab, Key),
     ets:delete(TimerTab, Key),
     {Incr, CurPid} = maybe_spawn_worker(Cur - Due < 1000, Singleton, Name, MFA, JobTab),
@@ -463,7 +455,7 @@ spec_min([{Key, Value} | Rest], Acc) ->
         end,
     spec_min(Rest, NewAcc).
 
-next_timeout(#state{max_timeout = MaxTimeout, timer = TimerTab}) ->
+next_timeout(#state{max_timeout = MaxTimeout, timer_tab = TimerTab}) ->
     case ets:first(TimerTab) of
         '$end_of_table' -> infinity;
         {Due, _} -> min(max(Due - current_millisecond(), 0), MaxTimeout)
@@ -481,21 +473,10 @@ in_range(_Current, _Start, _End) -> ok.
 to_rfc3339(unlimited) -> unlimited;
 to_rfc3339(Next) -> calendar:system_time_to_rfc3339(Next div 1000, [{unit, second}]).
 
-job_to_statistic(Job, TimeZone, Now) ->
-    #job{job = JobSpec, status = Status, opts = Opts,
-        ok = Ok, failed = Failed, result = Res, run_microsecond = RunMs} = Job,
-    #{start_time := StartTime, end_time := EndTime} = JobSpec,
-    Start = datetime_to_millisecond(TimeZone, StartTime),
-    End = datetime_to_millisecond(TimeZone, EndTime),
-    JobSpec#{status => Status, ok => Ok, failed => Failed, opts => Opts,
-        next => predict_datetime(Status, JobSpec, Start, End, ?MAX_SIZE, TimeZone, Now),
-        start_time => to_rfc3339(datetime_to_millisecond(TimeZone, StartTime)),
-        end_time => to_rfc3339(datetime_to_millisecond(TimeZone, EndTime)),
-        node => node(), results => Res, run_microsecond => RunMs}.
-
 predict_datetime(deactivate, _, _, _, _, _, _) -> [];
-predict_datetime(activate, #{type := every, crontab := Sec} = Job, Start, End, Num, TimeZone, Now) ->
-    predict_datetime_2(Job, TimeZone, Now - Sec * 1000, Start, End, Num, []);
+predict_datetime(activate, #{type := every, crontab := Sec} = Job, Start, End, Num, TimeZone, NowT) ->
+    Now = case maps:find(name, Job) of error -> NowT; _ -> NowT - Sec * 1000 end,
+    predict_datetime_2(Job, TimeZone, Now, Start, End, Num, []);
 predict_datetime(activate, Job, Start, End, Num, TimeZone, Now) ->
     predict_datetime_2(Job, TimeZone, Now, Start, End, Num, []).
 
@@ -557,14 +538,31 @@ unlink_pid(_) -> ok.
 get_pid(Pid) when is_pid(Pid) -> Pid;
 get_pid(Name) when is_atom(Name) -> whereis(Name).
 
-do_statistic(Name, State) ->
-    #state{timer = Timer, job_tab = JobTab, time_zone = TZ} = State,
+job_to_statistic(Job = #job{name = Name}) ->
+    TZ = get_time_zone(),
+    Next = get_next_schedule_time(Name),
+    job_to_statistic(Job, TZ, Next).
+
+job_to_statistic(Name, State) ->
+    #state{timer_tab = Timer, job_tab = JobTab, time_zone = TZ} = State,
     case ets:lookup(JobTab, Name) of
         [Job] ->
             Next = get_next_schedule_time(Timer, Name),
             {ok, job_to_statistic(Job, TZ, Next)};
         [] -> {error, not_found}
     end.
+
+job_to_statistic(Job, TimeZone, Now) ->
+    #job{job = JobSpec, status = Status, opts = Opts,
+        ok = Ok, failed = Failed, result = Res, run_microsecond = RunMs} = Job,
+    #{start_time := StartTime, end_time := EndTime} = JobSpec,
+    Start = datetime_to_millisecond(TimeZone, StartTime),
+    End = datetime_to_millisecond(TimeZone, EndTime),
+    JobSpec#{status => Status, ok => Ok, failed => Failed, opts => Opts,
+        next => predict_datetime(Status, JobSpec, Start, End, ?MAX_SIZE, TimeZone, Now),
+        start_time => to_rfc3339(datetime_to_millisecond(TimeZone, StartTime)),
+        end_time => to_rfc3339(datetime_to_millisecond(TimeZone, EndTime)),
+        node => node(), results => Res, run_microsecond => RunMs}.
 
 %% For PropEr Test
 -ifdef(TEST).
