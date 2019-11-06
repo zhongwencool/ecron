@@ -1,4 +1,5 @@
--define(Job, ecron_job).
+-define(Job, ecron_local_jobs).
+-define(GlobalJob, ecron_global_jobs).
 -define(Ecron, ecron).
 
 -define(MAX_TIMEOUT, 4294967). %% (16#ffffffff div 1000) 49.71 days.

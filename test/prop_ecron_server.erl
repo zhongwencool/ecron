@@ -26,6 +26,7 @@ prop_server() ->
     ?FORALL(Cmds, commands(?MODULE),
         begin
             application:set_env(ecron, local_jobs, []),
+            application:set_env(ecron, global_jobs, []),
             application:ensure_all_started(ecron),
             ecron_tick:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),
@@ -196,7 +197,7 @@ is_expired(Spec, StartTime, EndTime) ->
     {ok, Type, Job} = ecron:parse_spec(Spec),
     Start = ecron_tick:datetime_to_millisecond(TZ, StartTime),
     End = ecron_tick:datetime_to_millisecond(TZ, EndTime),
-    [] =:= ecron_tick:predict_datetime(activate, #{type => Type, crontab => Job}, Start, End, 10, TZ).
+    [] =:= ecron_tick:predict_datetime(activate, #{type => Type, crontab => Job}, Start, End, 10, TZ, erlang:system_time(millisecond)).
 
 add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
