@@ -6,8 +6,10 @@
 -define(Activate, [ecron, activate]).
 -define(Deactivate, [ecron, deactivate]).
 -define(Delete, [ecron, delete]).
+-define(GlobalUp, [ecron, global, up]).
+-define(GlobalDown, [ecron, global, down]).
 
--define(Events, [?Success, ?Failure, ?Activate, ?Deactivate, ?Delete]).
+-define(Events, [?Success, ?Failure, ?Activate, ?Deactivate, ?Delete, ?GlobalUp, ?GlobalDown]).
 %% API
 -export([attach/0, detach/0]).
 -define(TELEMETRY_HANDLE, ecron_telemetry_metrics).
@@ -33,4 +35,8 @@ handle_event(?Success, #{run_microsecond := Ms, run_result := Res},
 handle_event(?Failure, #{run_microsecond := Ms, run_result := {Error, Reason, Stack}},
     #{name := Name, mfa := MFA}, _Config) ->
     ?LOG_ERROR("EcronJob(~p)-~p CRASH in ~p microsecond. {Error, Reason}: {~p, ~p}. Stack:~p",
-        [Name, MFA, Ms, Error, Reason, Stack]).
+        [Name, MFA, Ms, Error, Reason, Stack]);
+handle_event(?GlobalUp, #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global UP on ~p at -~p ms because of ~p.", [Node, Time, Reason]);
+handle_event(?GlobalDown, #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global DOWN on ~p at -~p ms because of ~p.", [Node, Time, Reason]).
