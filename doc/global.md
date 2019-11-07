@@ -14,17 +14,19 @@ You should set it to “half plus one”.
 
 for example:
 
+### Run on majority
 1. Set up 3 nodes in on cluster.  
 2. `cluster_quorum_size=2`.
 3. (`ABC`) nodes cluster split into 2 part(`AB`  =/=  `C`).
 4. the global task manager will run on `AB` cluster.
 
+### Don't run
 1. Set up 3 nodes in on cluster.  
 2. `cluster_quorum_size=2`.
 3. (`ABC`) nodes cluster split into 3 part(`A` =/= `B`  =/=  `C`).
 4. the global task manager doesn't run.
 
-
+### Run on every node if brain split.
 1. Set up 3 nodes in on cluster.  
 1. `cluster_quorum_size=1`.
 2. (`ABC`) nodes cluster split into 3 part(`A` =/= `B`  =/=  `C`).
