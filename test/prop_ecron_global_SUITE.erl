@@ -107,9 +107,13 @@ transfer(_Config) ->
 
 error_config(_Config) ->
     application:set_env(ecron, global_jobs, [{global_job, "* */10 * * * * *", {io_lib, format, ["error"]}}]),
-    ok = application:start(ecron),
+    Reason = application:start(ecron),
+    {error,
+        {{shutdown,
+            {failed_to_start_child,ecron_monitor,
+                "invalid_spec: \"* */10 * * * * *\""}},
+            {ecron_app,start,[normal,[]]}}} = Reason,
     undefined = global:whereis_name(ecron),
-    application:stop(ecron),
     ok.
 
 -define(Env(Quorum), [

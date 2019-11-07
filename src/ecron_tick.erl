@@ -5,7 +5,7 @@
 -export([activate/1, deactivate/1]).
 -export([statistic/1, statistic/0]).
 -export([reload/0]).
--export([predict_datetime/2]).
+-export([predict_datetime/2, parse_crontab/2]).
 
 -export([start_link/1, handle_call/3, handle_info/2, init/1, handle_cast/2]).
 -export([spawn_mfa/3, clear/0]).
