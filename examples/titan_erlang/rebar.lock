@@ -1,8 +1,8 @@
 {"1.1.0",
-[{<<"ecron">>,{pkg,<<"ecron">>,<<"0.4.0">>},0},
+[{<<"ecron">>,{pkg,<<"ecron">>,<<"0.5.0">>},0},
  {<<"telemetry">>,{pkg,<<"telemetry">>,<<"0.4.0">>},1}]}.
 [
 {pkg_hash,[
- {<<"ecron">>, <<"FDF897B57AD235F4A033DA41B2B61BB382D9CC4C9C63C4F694FE493612E8DC8F">>},
+ {<<"ecron">>, <<"9D457D548C0F7B09ACD558270F5AD02BB10A5DB89E3D9A109E17FA13620042E8">>},
  {<<"telemetry">>, <<"8339BEE3FA8B91CB84D14C2935F8ECF399CCD87301AD6DA6B71C09553834B2AB">>}]}
 ].

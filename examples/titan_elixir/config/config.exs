@@ -28,7 +28,7 @@ config :ecron, :time_zone, :local # or :utc
 #  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly | @minutely
 #  4. @every 1h2m3s
 
-config :ecron, :jobs,
+config :ecron, :local_jobs,
        [
          # Standard crontab spec without second (default second is 0 not *).
          {:crontab_job, "*/15 * * * *", {StatelessCron, :inspect, ["Runs on 0, 15, 30, 45 minutes"]}},
@@ -57,4 +57,10 @@ config :ecron, :jobs,
          },
          # Parallel job, singleton default is true.
          {:no_singleton_job, "@minutely", {Process, :sleep, [61000]}, :unlimited, :unlimited, singleton: false}
+       ]
+
+config :ecron, :cluster_quorum_size, 1
+config :ecron, :global_jobs,
+       [
+         {:global_crontab_job, "*/15 * * * * *", {StatelessCron, :inspect, ["Runs on 0, 15, 30, 45 seconds"]}},
        ]

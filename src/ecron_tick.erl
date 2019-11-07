@@ -131,15 +131,12 @@ init(local, TZ, MaxTimeout, Tab) ->
         Reason -> Reason
     end;
 init(global, TZ, MaxTimeout, Tab) ->
-    case parse_crontab(global_jobs(), []) of
-        {ok, Jobs} ->
-            ?GlobalJob = ets:new(?GlobalJob, [named_table, set, public, {keypos, 2}]),
-            [begin add_job(?GlobalJob, Tab, Job, TZ, Opts, true)
-             end || #job{job = Job, opts = Opts, status = activate} <- Jobs],
-            State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer_tab = Tab, job_tab = ?GlobalJob},
-            {ok, State, next_timeout(State)};
-        Reason -> Reason
-    end.
+    {ok, Jobs} = parse_crontab(global_jobs(), []),
+    ?GlobalJob = ets:new(?GlobalJob, [named_table, set, public, {keypos, 2}]),
+    [begin add_job(?GlobalJob, Tab, Job, TZ, Opts, true)
+     end || #job{job = Job, opts = Opts, status = activate} <- Jobs],
+    State = #state{max_timeout = MaxTimeout, time_zone = TZ, timer_tab = Tab, job_tab = ?GlobalJob},
+    {ok, State, next_timeout(State)}.
 
 parse_crontab([], Acc) -> {ok, Acc};
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs], Acc) ->
