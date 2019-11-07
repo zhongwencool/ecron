@@ -7,7 +7,6 @@
 -export([start_link/0, init/1]).
 
 -define(LOCAL_WORKER, ecron_tick).
--define(MONITOR_WORKER, ecron_monitor).
 -define(GLOBAL_WORKER, ecron_global).
 
 start_link() ->
@@ -62,7 +61,7 @@ monitor_worker([]) -> [];
 monitor_worker(Jobs) ->
     [#{
         id => ?MONITOR_WORKER,
-        start => {?MONITOR_WORKER, start_link, [Jobs]},
+        start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, Jobs]},
         restart => permanent,
         shutdown => 1000,
         type => worker,

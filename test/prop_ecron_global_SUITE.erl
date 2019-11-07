@@ -17,7 +17,7 @@ suite() ->
 
 all() ->
     [
-        basic, quorum, transfer, error_config
+        basic, quorum, quorum_in_majority, transfer, error_config
     ].
 
 groups() -> [].
@@ -36,6 +36,7 @@ basic(_Config) ->
     start_master(2),
     undefined = global:whereis_name(ecron),
     start_slave(?Slave1, 2),
+    timer:sleep(180),
     Pid = global:whereis_name(ecron),
     true = is_pid(Pid),
     timer:sleep(180),
@@ -60,6 +61,8 @@ quorum(_Config) ->
     start_master(1),
     timer:sleep(150),
     Pid0 = global:whereis_name(ecron),
+    error = gen_server:call(ecron_monitor, test),
+    gen_server:cast(ecron_monitor, test),
     true = is_pid(Pid0),
     start_slave(?Slave1, 1),
     Pid = global:whereis_name(ecron),
@@ -81,6 +84,32 @@ quorum(_Config) ->
     true = is_pid(Pid4),
     stop_master(),
     undefined = global:whereis_name(ecron),
+    ok.
+
+quorum_in_majority(_Config) ->
+    start_master(2),
+    timer:sleep(150),
+    undefined = global:whereis_name(ecron),
+    start_slave(?Slave1, 2),
+    timer:sleep(150),
+    Pid = global:whereis_name(ecron),
+    true = is_pid(Pid),
+    Pid1 = rpc:call(?Slave1, global, whereis_name, [ecron]),
+    true = is_pid(Pid1),
+    start_slave(?Slave2, 2),
+    timer:sleep(180),
+    Pid2 = rpc:call(?Slave2, global, whereis_name, [ecron]),
+    true = is_pid(Pid2),
+    rpc:call(?Slave1, application, stop, [ecron]),
+    timer:sleep(180),
+    Pid3 = global:whereis_name(ecron),
+    true = is_pid(Pid3),
+    rpc:call(?Slave2, application, stop, [ecron]),
+    timer:sleep(180),
+    undefined = global:whereis_name(ecron),
+    stop_slave(?Slave1),
+    stop_slave(?Slave2),
+    stop_master(),
     ok.
 
 transfer(_Config) ->

@@ -1,3 +1,4 @@
+-define(MONITOR_WORKER, ecron_monitor).
 -define(Job, ecron_local_jobs).
 -define(GlobalJob, ecron_global_jobs).
 -define(Ecron, ecron).
