@@ -10,6 +10,7 @@ otp_release:
 script:
   - ./rebar3 as test get-deps
   - epmd -daemon
-  - ./rebar3 ct -v -c
+  - ./rebar3 as test proper -c
+  - ./rebar3 as test ct -c
   - ./rebar3 as test cover
   - ./rebar3 as test coveralls send
