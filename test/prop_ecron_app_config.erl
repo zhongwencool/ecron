@@ -11,6 +11,7 @@ prop_application_ok_config() ->
         ?IMPLIES(prop_ecron:check_day_of_month(Spec),
             begin
                 error_logger:tty(false),
+                application:start(telemetry),
                 application:stop(ecron),
                 SpecStr = prop_ecron:spec_to_str(Spec),
                 Jobs =
@@ -20,11 +21,11 @@ prop_application_ok_config() ->
                     end,
                 TimeZone = application:get_env(ecron, time_zone, local),
                 application:set_env(ecron, time_zone, utc),
-                application:set_env(ecron, jobs, Jobs),
+                application:set_env(ecron, local_jobs, Jobs),
                 Result = application:start(ecron),
                 
                 application:set_env(ecron, time_zone, TimeZone),
-                application:set_env(ecron, jobs, []),
+                application:set_env(ecron, local_jobs, []),
                 
                 error_logger:tty(true),
                 ?WHENFAIL(
@@ -40,6 +41,7 @@ prop_application_error_config() ->
     ?FORALL({Spec, UseTime}, {prop_ecron_spec:maybe_error_spec(), range(0, 3)},
         begin
             error_logger:tty(false),
+            application:start(telemetry),
             application:stop(ecron),
             SpecStr = prop_ecron:spec_to_str(Spec),
             Jobs =
@@ -49,7 +51,7 @@ prop_application_error_config() ->
                     2 -> [{test, "* * * * * *", {io_lib, format, ["~s", SpecStr]}, {2019, 12, 10}, unlimited}];
                     3 -> [{test, test, {io_lib, format, ["~s", SpecStr]}}]
                 end,
-            application:set_env(ecron, jobs, Jobs),
+            application:set_env(ecron, local_jobs, Jobs),
             T = application:start(ecron),
             Res =
                 case T of

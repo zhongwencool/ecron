@@ -16,6 +16,6 @@ defmodule TitanElixir.MixProject do
   #
   # Run "mix help deps" for examples and options.
   defp deps do
-    [{:ecron, ">= 0.4.0"}]
+    [{:ecron, ">= 0.5.0"}]
   end
 end

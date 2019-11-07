@@ -1,4 +1,6 @@
--define(Job, ecron_job).
+-define(MONITOR_WORKER, ecron_monitor).
+-define(Job, ecron_local_jobs).
+-define(GlobalJob, ecron_global_jobs).
 -define(Ecron, ecron).
 
 -define(MAX_TIMEOUT, 4294967). %% (16#ffffffff div 1000) 49.71 days.
@@ -7,3 +9,5 @@
 -define(Activate, [ecron, activate]).
 -define(Deactivate, [ecron, deactivate]).
 -define(Delete, [ecron, delete]).
+-define(GlobalUp, [ecron, global, up]).
+-define(GlobalDown, [ecron, global, down]).

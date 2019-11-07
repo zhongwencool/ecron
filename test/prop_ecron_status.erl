@@ -26,7 +26,7 @@ prop_cron_apply_ok() ->
     ?FORALL({Name, Request, FuncType}, {name(), term(), oneof([mfa, func, wrong])},
         begin
             error_logger:tty(false),
-            application:set_env(ecron, jobs, [{good_yearly, "@yearly", {io, format, ["Yearly~n"]}}]),
+            application:set_env(ecron, local_jobs, [{good_yearly, "@yearly", {io, format, ["Yearly~n"]}}]),
             application:set_env(ecron, adjusting_time_second, 1),
             application:ensure_all_started(ecron),
             MFA =
@@ -56,7 +56,7 @@ prop_cron_apply_error(opts) -> [{numtests, 10}].
 prop_cron_apply_error() ->
     ?FORALL({Name, Request}, {name(), term()},
         begin
-            application:set_env(ecron, jobs, []),
+            application:set_env(ecron, local_jobs, []),
             application:ensure_all_started(ecron),
             error_logger:tty(false),
             MFA = {?MODULE, echo, [wrong, Request]},
@@ -82,7 +82,7 @@ prop_already_end(opts) -> [{numtests, 300}].
 prop_already_end() ->
     ?FORALL({Name, Request, Shift}, {name(), term(), range(100, 1000)},
         begin
-            application:set_env(ecron, jobs, []),
+            application:set_env(ecron, local_jobs, []),
             application:ensure_all_started(ecron),
             EndTime = reduce_time(Shift),
             Name1 = {1, Name},
@@ -101,7 +101,7 @@ prop_deactivate(opts) -> [{numtests, 10}].
 prop_deactivate() ->
     ?FORALL({Name, Request, Shift}, {name(), term(), range(3, 4)},
         begin
-            application:set_env(ecron, jobs, []),
+            application:set_env(ecron, local_jobs, []),
             application:set_env(ecron, adjusting_time_second, 1),
             application:ensure_all_started(ecron),
             StartTime = add_time(Shift),
@@ -139,7 +139,7 @@ prop_restart_server() ->
     ?FORALL(Name, term(),
         begin
             error_logger:tty(false),
-            application:set_env(ecron, jobs, [
+            application:set_env(ecron, local_jobs, [
                 {ecron_test_1, "@yearly", {io, format, ["Yearly~n"]}},
                 {ecron_test_2, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited}
             ]),
@@ -164,7 +164,8 @@ prop_singleton() ->
     ?FORALL({Name, Singleton}, {term(), bool()},
         begin
             error_logger:tty(false),
-            application:set_env(ecron, jobs, [{crontab_job_xyz, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited, [{singleton, Singleton}]}]),
+            application:start(telemetry),
+            application:set_env(ecron, local_jobs, [{crontab_job_xyz, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited, [{singleton, Singleton}]}]),
             application:set_env(ecron, adjusting_time_second, 1),
             application:stop(ecron),
             application:start(ecron),

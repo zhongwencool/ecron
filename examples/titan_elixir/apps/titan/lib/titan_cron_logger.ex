@@ -3,7 +3,11 @@ defmodule TitanCronLogger do
 
   require Logger
 
-  @events [[:ecron, :activate], [:ecron, :deactivate], [:ecron, :delete], [:ecron, :success], [:ecron, :failure]]
+  @events [
+    [:ecron, :activate], [:ecron, :deactivate],
+    [:ecron, :delete], [:ecron, :success], [:ecron, :failure],
+    [:ecron, :global, :up], [:ecron, :global, :down],
+  ]
 
   def attach(), do: :telemetry.attach_many(:ecron_metrics, @events, &handle_event/4, :undefined)
   def detach(), do: :telemetry.detach(:ecron_metrics)
@@ -26,6 +30,14 @@ defmodule TitanCronLogger do
 
   def handle_event([:ecron, :failure], %{run_microsecond: ms, run_result: res}, %{name: name, mfa: mfa}, _config) do
     Logger.error("Ecron #{inspect name}(#{inspect mfa}}) CRASH in #{inspect ms}} microsecond. result is #{inspect res}}")
+  end
+
+  def handle_event([:ecron, :global, :up], %{action_ms: ms, reason: reason}, %{node: node}, _config) do
+    Logger.info("Ecron global UP on #{inspect node} at #{inspect ms} ms because of #{inspect reason}}")
+  end
+
+  def handle_event([:ecron, :global, :down], %{action_ms: ms, reason: reason}, %{node: node}, _config) do
+    Logger.info("Ecron global DOWN on #{inspect node} at #{inspect ms} ms because of #{inspect reason}}")
   end
 
 end

@@ -36,7 +36,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 0.4"}]
+    [{:ecron, "~> 0.5"}]
   end
 ```
 
@@ -47,7 +47,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
 [
    {ecron, [      
       {time_zone, local}, %% local or utc
-      {jobs, [                
+      {local_jobs, [
          %% {JobName, CrontabSpec, {M, F, A}}
          %% {JobName, CrontabSpec, {M, F, A}, StartDateTime, EndDateTime}
          %% CrontabSpec
@@ -64,7 +64,10 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
          {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited},
          %% parallel job         
          {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
-     ]}}
+     ]},
+     {global_jobs, []}, %% Global Spec has the same format as local_jobs.
+     {cluster_quorum_size, 1} %%  Minimum number of nodes which run ecron. Global_jobs only run on majority cluster when it > ClusterNode/2.
+    }
 ].
 ```
 
@@ -76,6 +79,7 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
   it will skip the tasks which are supposed be running during the sudden lapse of time,
   then recalculate the next running time by the latest system time.
   You can also reload task manually by `ecron:reload().`
+* Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
 
 ## Advanced Usage 
 
@@ -256,10 +260,9 @@ such as you can monitor events dispatch duration and failures to create alerts w
 
 
 ```shell
-  $ rebar3 do proper -c, cover -v
+  $ rebar3 do proper -c, ct -c, cover -v
 ```
 
 ## TODO
 
 * support the last day of a month.
-* support `global` in cluster.

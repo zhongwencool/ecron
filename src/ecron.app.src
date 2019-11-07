@@ -1,13 +1,14 @@
 {application, ecron,
     [{description, "cron-like/crontab job scheduling library"},
-        {vsn, "0.4.0"},
+        {vsn, "0.5.0"},
         {registered, [ecron_sup, ecron]},
         {mod, {ecron_app, []}},
         {applications, [kernel, stdlib, telemetry]},
         {env, [
             {adjusting_time_second, 604800}, %7*24*3600
             {time_zone, local}, %% local or utc
-            {jobs, [
+            {cluster_quorum_size, 1}, %% A majority of the nodes must connect.
+            {local_jobs, [
                 %% {JobName, CrontabSpec, {M, F, A}}
                 %% {JobName, CrontabSpec, {M, F, A}, StartDateTime, EndDateTime}
                 %% CrontabSpec
@@ -21,6 +22,9 @@
                 %% {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
                 %% Runs 0-23 o'clock since {{2019,9,26},{0,0,0}}.
                 %% {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited}
+            ]},
+            {global_jobs, [
+                %% {global_job, "*/10 * * * * *", {io, format, ["Runs on 0, 15, 30, 45 seconds~n"]}}
             ]}
         ]},
         {modules, []},
