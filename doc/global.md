@@ -63,11 +63,12 @@
 10. Enter step 5 again, When notified.
 
 ```
-     NodeA             NodeB              NodeC
-      sup               sup                sup
-       |                |  \                |
-    monitor             | monitor         monitor
-       |                |      |            |
-       |                |     link          |
-       |____link____GlobalJob__|____link____|
+     NodeA             NodeB             NodeC
+   supervisor        supervisor        supervisor
+       |                |     |            |
+    monitor          monitor  |          monitor
+         \              |     |            /
+          \           [link]  |           /
+           \            |     |          /
+           [link]-----GlobalJob-----[link]
 ``` 
