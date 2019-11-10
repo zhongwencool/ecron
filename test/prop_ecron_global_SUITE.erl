@@ -17,7 +17,8 @@ suite() ->
 
 all() ->
     [
-        basic, quorum, quorum_in_majority, transfer, error_config
+        basic, quorum, quorum_in_majority, transfer,
+        error_config, duplicate_config
     ].
 
 groups() -> [].
@@ -139,16 +140,30 @@ error_config(_Config) ->
     Reason = application:start(ecron),
     {error,
         {{shutdown,
-            {failed_to_start_child,ecron_monitor,
+            {failed_to_start_child, ecron_monitor,
                 "invalid_spec: \"* */10 * * * * *\""}},
-            {ecron_app,start,[normal,[]]}}} = Reason,
+            {ecron_app, start, [normal, []]}}} = Reason,
+    undefined = global:whereis_name(ecron),
+    ok.
+
+duplicate_config(_Config) ->
+    application:set_env(ecron, global_jobs, [
+        {global_job, "* */10 * * * *", {io_lib, format, ["error"]}},
+        {global_job, "* */15 * * * *", {io_lib, format, ["error2"]}}
+    ]),
+    Reason = application:start(ecron),
+    {error,
+        {{shutdown,
+            {failed_to_start_child, ecron_monitor,
+                "Duplicate job name: global_job"}},
+            {ecron_app, start, [normal, []]}}} = Reason,
     undefined = global:whereis_name(ecron),
     ok.
 
 -define(Env(Quorum), [
     {adjusting_time_second, 604800},
     {time_zone, local},
-    {cluster_quorum_size, Quorum},
+    {global_quorum_size, Quorum},
     {local_jobs, []},
     {global_jobs, [{global_job, "*/10 * * * * *", {io_lib, format, ["Runs on 0, 15, 30, 45 seconds~n"]}}]}
 ]).

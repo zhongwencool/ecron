@@ -145,7 +145,11 @@ parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs], Acc) ->
     parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, []} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs], Acc) ->
     case parse_job(Name, Spec, MFA, Start, End, Opts) of
-        {ok, Job} -> parse_crontab(Jobs, [Job | Acc]);
+        {ok, Job} ->
+            case lists:keyfind(Name, #job.name, Acc) of
+                false -> parse_crontab(Jobs, [Job | Acc]);
+                _ -> {stop, lists:flatten(io_lib:format("Duplicate job name: ~p", [Name]))}
+            end;
         {error, Field, Reason} -> {stop, lists:flatten(io_lib:format("~p: ~p", [Field, Reason]))}
     end;
 parse_crontab([L | _], _Acc) -> {stop, L}.

@@ -31,9 +31,12 @@ start_global(Reason) ->
     end.
 
 stop_global(Reason) ->
-    Meta = #{action_ms => erlang:system_time(millisecond), reason => Reason},
-    telemetry:execute(?GlobalDown, Meta, #{node => node()}),
-    supervisor:terminate_child(?MODULE, ?GLOBAL_WORKER).
+    case supervisor:terminate_child(?MODULE, ?GLOBAL_WORKER) of
+        ok ->
+            Meta = #{action_ms => erlang:system_time(millisecond), reason => Reason},
+            telemetry:execute(?GlobalDown, Meta, #{node => node()});
+        Err -> Err
+    end.
 
 init([]) ->
     ?Job = ets:new(?Job, [named_table, set, public, {keypos, 2}]),

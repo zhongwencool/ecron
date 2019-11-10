@@ -1,13 +1,13 @@
 {application, ecron,
     [{description, "cron-like/crontab job scheduling library"},
-        {vsn, "0.5.0"},
+        {vsn, "0.5.1"},
         {registered, [ecron_sup, ecron]},
         {mod, {ecron_app, []}},
         {applications, [kernel, stdlib, telemetry]},
         {env, [
             {adjusting_time_second, 604800}, %7*24*3600
             {time_zone, local}, %% local or utc
-            {cluster_quorum_size, 1}, %% A majority of the nodes must connect.
+            {global_quorum_size, 1}, %% A majority of the nodes must connect.
             {local_jobs, [
                 %% {JobName, CrontabSpec, {M, F, A}}
                 %% {JobName, CrontabSpec, {M, F, A}, StartDateTime, EndDateTime}

@@ -24,7 +24,7 @@ handle_cast(_Request, State) ->
     {noreply, State}.
 
 handle_info(Reason, State) ->
-    QuorumSize = application:get_env(ecron, cluster_quorum_size, 1),
+    QuorumSize = application:get_env(ecron, global_quorum_size, 1),
     {ResL, _BadNodes} = rpc:multicall(nodes(visible), erlang, whereis, [ecron], 6000),
     Healthy = lists:foldl(fun(Pid, Acc) -> case is_pid(Pid) of true -> Acc + 1; false -> Acc end end, 1, ResL),
     case Healthy >= QuorumSize of
