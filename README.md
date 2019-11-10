@@ -157,6 +157,26 @@ ok
   type => cron}
 }
 ````
+## Implementation
+The local_jobs workflow is as follows:
+1. `ecron_sup` (supervisor) would Start a standalone gen_server `ecron`, when application starts.
+2. Look for configuration `{jobs, Jobs}` when `ecron` process initialization.
+3. For each crontab job found, determine the next time in the future that each command must run.
+4. Place those commands on the ordered_set ets with their `{Corresponding_time, Name}` to run as key.
+5. Enter main loop:
+    * Examine the task entry at the head of the ets, compute how far in the future it must run.
+    * Sleep for that period of time by gen_server timeout feature.
+    * On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
+    * Delete old key in ets.
+    * Determine the next time in the future to run this command and place it back on the ets at that time value.
+    
+Additionally, `ecron` also collect job's latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.
+
+[Check this for global_jobs workflow](https://github.com/zhongwencool/ecron/blob/master/doc/global.md#Implementation).       
+
+## Telemetry
+Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
+such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
 
 ## CRON Expression Format
 
@@ -242,27 +262,6 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
 >it also has 5 minutes of idle time between each run.
   
-## Implementation
-The local_jobs workflow is as follows:
-1. `ecron_sup` (supervisor) would Start a standalone gen_server `ecron`, when application starts.
-2. Look for configuration `{jobs, Jobs}` when `ecron` process initialization.
-3. For each crontab job found, determine the next time in the future that each command must run.
-4. Place those commands on the ordered_set ets with their `{Corresponding_time, Name}` to run as key.
-5. Enter main loop:
-    * Examine the task entry at the head of the ets, compute how far in the future it must run.
-    * Sleep for that period of time by gen_server timeout feature.
-    * On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
-    * Delete old key in ets.
-    * Determine the next time in the future to run this command and place it back on the ets at that time value.
-    
-Additionally, `ecron` also collect job's latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.
-
-[Check this for global_jobs workflow](https://github.com/zhongwencool/ecron/blob/master/doc/global.md#Implementation).       
-
-## Telemetry
-Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
-such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
-
 ## Test
 
 ```shell
