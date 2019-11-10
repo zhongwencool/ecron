@@ -11,7 +11,9 @@ you can use your own event handler. For example, you can create a module to hand
 ```erlang
 -module(my_ecron_telemetry_logger).
 -include_lib("kernel/include/logger.hrl").
--define(Events, [[ecron, success], [ecron, failure], [ecron, activate], [ecron, deactivate], [ecron, delete]]).
+-define(Events, [[ecron, success], [ecron, failure], [ecron, activate], 
+                 [ecron, deactivate], [ecron, delete], 
+                 [ecron, global, up], [ecron, global, down]]).
 %% API
 -export([attach/0, detach/0]).
 -define(TELEMETRY_HANDLE, ecron_telemetry_metrics).
@@ -35,7 +37,11 @@ handle_event([ecron, success], #{run_microsecond := Ms, run_result := Res},
 handle_event([ecron, failure], #{run_microsecond := Ms, run_result := {Error, Reason, Stack}},
     #{name := Name, mfa := MFA}, _Config) ->
     ?LOG_ERROR("EcronJob(~p)-~p CRASH in ~p microsecond. {Error, Reason}: {~p, ~p}. Stack:~p",
-        [Name, MFA, Ms, Error, Reason, Stack]).
+        [Name, MFA, Ms, Error, Reason, Stack]);
+handle_event([ecron, global, up], #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global UP on ~p at -~p ms because of ~p.", [Node, Time, Reason]);
+handle_event([ecron, global, down], #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global DOWN on ~p at -~p ms because of ~p.", [Node, Time, Reason]).
 ``` 
 
 Once you have a module like this, you can attach it when your application starts:
