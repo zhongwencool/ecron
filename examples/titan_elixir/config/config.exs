@@ -59,7 +59,7 @@ config :ecron, :local_jobs,
          {:no_singleton_job, "@minutely", {Process, :sleep, [61000]}, :unlimited, :unlimited, singleton: false}
        ]
 
-config :ecron, :cluster_quorum_size, 1
+config :ecron, :global_quorum_size, 1
 config :ecron, :global_jobs,
        [
          {:global_crontab_job, "*/15 * * * * *", {StatelessCron, :inspect, ["Runs on 0, 15, 30, 45 seconds"]}},

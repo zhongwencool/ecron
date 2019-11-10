@@ -5,24 +5,27 @@
 
 A lightweight/efficient cron-like job scheduling library for Erlang.
 
-Ecron does not poll the system on a minute-by-minute basis like cron does. 
-All jobs is assigned to a single process, just run as same as the [timer](http://erlang.org/doc/man/timer.html).
+All Ecron's jobs is assigned to one single gen_server process, just run as same as the [stdlib's timer](http://erlang.org/doc/man/timer.html).
 
-It organize the tasks to be run in a ordered_set ets with the next time to run as key. 
+It organize the jobs to be run in a ordered_set ets with the next time to run as key. 
 This way, you only need one process that calculates the time to wait until the next task should be executed, 
-then spawn the process to execute that task. Saves lots of processes. 
+then spawn the process to execute that task. 
 more detail see [Implementation](#Implementation).
  
-This implementation also prevents a lot of messages from flying around.
+Ecron does not poll the system on a second-by-second basis like cron does.
+The advantage of not doing this is to avoid lots of messages flying around. 
+
+All jobs are managed in one process, rather than running one job per process, 
+which saves lots of processes and avoids taking up a lot of memory. 
+After all, most of the time the process is waiting(do nothing but eat memory). 
 
 It offers:
 
 * Both cron-like scheduling and interval-based scheduling.
-* Well tested by `PropTest` ![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master).
-* Use gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
-* Minimal overhead. ecron aims to keep its code base small.
+* Well tested by [PropTest](https://github.com/proper-testing/proper) ![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master).
+* Using gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 
-You can find a collection of general best practices in [Full Erlang Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Full Elixir Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
+You can find a collection of general practices in [Full Erlang Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Full Elixir Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
 
 ## Installation
   
@@ -66,24 +69,25 @@ You can find a collection of general best practices in [Full Erlang Examples](ht
          {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
      ]},
      {global_jobs, []}, %% Global Spec has the same format as local_jobs.
-     {cluster_quorum_size, 1} %%  Minimum number of nodes which run ecron. Global_jobs only run on majority cluster when it > ClusterNode/2.
+     {global_quorum_size, 1} %%  Minimum number of nodes which run ecron. Global_jobs only run on majority cluster when it > ClusterNode/2.
     }
 ].
 ```
 
-* When `time_zone` is `local`, current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
-* When `time_zone` is `utc`, current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0).
-* The job will be auto remove at the end of the time.
+* Default `time_zone` is `local`, the current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
+* The current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0) when `{time_zone, utc}`.
+* The job will be auto remove at `EndDateTime`, the default value of `EndDateTime` is `unlimited`. 
 * Default job is singleton, Each task cannot be executed concurrently. 
 * If the system clock suddenly alter a lot(such as sleep your laptop for two hours or modify system time manually),
   it will skip the tasks which are supposed be running during the sudden lapse of time,
   then recalculate the next running time by the latest system time.
-  You can also reload task manually by `ecron:reload().`
-* Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
+  You can also reload task manually by `ecron:reload().` when the system time is manually modified.
+* Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check this for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
 
 ## Advanced Usage 
 
 ```erlang
+%% Same as: Spec = "0 * 0-5,18 * * 0-5", 
 Spec = #{second => [0], 
        minute => '*',   
        hour => [{0,5}, 18], %% same as [0,1,2,3,4,5,18]
@@ -109,7 +113,7 @@ EveryMFA = {io, format, ["Runs every 120 second.~n"]},
 ```
 ## Debug Support
 
-There are some function to get information for a Job and to handle the Job and Invocations.
+There are some function to get information for debugging jobs.
 ````erlang
 1> ecron:deactivate(CrontabName).
 ok
@@ -126,8 +130,8 @@ ok
        start_time => unlimited,end_time => unlimited,
        failed => 0,mfa => {io,format,["ddd"]},
        name => test,status => activate,type => cron,
-       ok => 0,results => [],run_microsecond => [],       
-       opts => [{singleton,true}],
+       ok => 1,results => [ok],run_microsecond => [12],       
+       opts => [{singleton,true}], node => 'test@127.0.0.1',
        next =>
           ["2019-09-27T01:00:00+08:00","2019-09-27T13:00:00+08:00",
            "2019-09-30T01:00:00+08:00","2019-09-30T13:00:00+08:00",
@@ -153,6 +157,26 @@ ok
   type => cron}
 }
 ````
+## Implementation
+The local_jobs workflow is as follows:
+1. `ecron_sup` (supervisor) would Start a standalone gen_server `ecron`, when application starts.
+2. Look for configuration `{jobs, Jobs}` when `ecron` process initialization.
+3. For each crontab job found, determine the next time in the future that each command must run.
+4. Place those commands on the ordered_set ets with their `{Corresponding_time, Name}` to run as key.
+5. Enter main loop:
+    * Examine the task entry at the head of the ets, compute how far in the future it must run.
+    * Sleep for that period of time by gen_server timeout feature.
+    * On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
+    * Delete old key in ets.
+    * Determine the next time in the future to run this command and place it back on the ets at that time value.
+    
+Additionally, `ecron` also collect job's latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.
+
+[Check this for global_jobs workflow](https://github.com/zhongwencool/ecron/blob/master/doc/global.md#Implementation).       
+
+## Telemetry
+Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
+such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
 
 ## CRON Expression Format
 
@@ -223,10 +247,11 @@ Entry                  | Description                                | Equivalent
 >You might find something like [https://crontab.guru/](https://crontab.guru/) or [https://cronjob.xyz/](https://cronjob.xyz/) helpful. 
 >But, note that these don't necessarily accept the exact same syntax as this library, 
 >for instance, it doesn't accept the seconds field, so keep that in mind.
+>The best way to verify the spec format is `ecron:parse_spec("0 0 1 1 1-6 1", 10).`. 
 
 ## Intervals
 
-You may also schedule a job to execute at fixed intervals, starting at the time it's added or cron is run. 
+You may also execute job at fixed intervals, starting at the time it's added or cron is run. 
 This is supported by formatting the cron spec like this:
 ```shell
 @every <duration>
@@ -235,34 +260,10 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 
 >Note: The interval doesn't take the job runtime into account. 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
->it will have 5 minutes of idle time between each run.
+>it also has 5 minutes of idle time between each run.
   
-## Implementation
-
-1. On application start-up, start a standalone gen_server `ecron` under supervision tree(`ecron_sup`).
-2. Look for configuration `{jobs, Jobs}` when  ecron process initialization.
-3. For each crontab job found, determine the next time in the future that each command must run.
-4. Place those commands on the ordered_set ets with their `{Corresponding_time, Name}` to run as key.
-5. Enter main loop:
-    * Examine the task entry at the head of the ets, compute how far in the future it must run.
-    * Sleep for that period of time by gen_server timeout feature.
-    * On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
-    * Delete old key in ets.
-    * Determine the next time in the future to run this command and place it back on the ets at that time value.
-    
-Additionally, this ecron also collect the MFA latest 16 results and execute times, you can observe by `ecron:statistic(Name)`.       
-
-## Telemetry
-Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
-such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
-
-## Proper Test
-
+## Test
 
 ```shell
   $ rebar3 do proper -c, ct -c, cover -v
 ```
-
-## TODO
-
-* support the last day of a month.
