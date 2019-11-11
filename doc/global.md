@@ -53,14 +53,15 @@
 ### Implementation
 1. The top supervisor `ecron_sup` start at first.
 2. Nothing will happen if the `global_jobs` is empty.
-3. When `global_jobs` is not empty, `ecron_sup` would start_link `ecron_monitor` worker (gen_server).
+3. `ecron_sup` would start_link `ecron_monitor` worker (gen_server) if `global_jobs` is not empty.
 4. `ecron_monitor` subscribes node's up/down messages by [net_kernel:monitor_nodes(true)](http://erlang.org/doc/man/net_kernel.html#monitor_nodes-1), when it initializes.
-5. Checking if there is enough `ecron` process in the cluster(`global_quorum_size`).
-6. Trying to terminate global job manager process when cluster's `ecron` number less than `global_quorum_size`.
-7. Otherwise, trying to start a global job manager process, This gen_server register by [global:register_name/2](http://erlang.org/doc/man/global.html#register_name-2).
-8. All the nodes are rushing to register this global jobs manager process, only one node will success, other node's `ecron_monitor` would link this process if the process already exists.
-9. The `ecron_monitor` will receive notification, when node down/up or the global job manager dies.
-10. Enter step 5 again, When notified.
+5. Enter `ecron_monitor` main loop:
+    * Checking if there is enough `ecron` process in the cluster(`global_quorum_size`).
+    * Trying to terminate global_job manager process when cluster's `ecron` number less than `global_quorum_size`.
+    * Otherwise, trying to start a global_job manager process, This gen_server register by [global:register_name/2](http://erlang.org/doc/man/global.html#register_name-2).
+    * All the nodes are rushing to register this global jobs manager process, only one node will success, other node's `ecron_monitor` would link this process if the process already exists.
+    * The `ecron_monitor` should receive notification, when node down/up or the global_job manager has terminated.
+    * Goto step 5 again, When notified.
 
 ```
      NodeA             NodeB             NodeC
@@ -72,3 +73,4 @@
            \            |     |          /
            [link]-----GlobalJob-----[link]
 ``` 
+NodeB has won the race and spawn global manager process, other node's `ecron_monitor` only link to this manager.

@@ -1,3 +1,4 @@
+%%% @private
 -module(ecron_monitor).
 -behaviour(gen_server).
 
