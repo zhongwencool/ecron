@@ -4,7 +4,7 @@ defmodule Titan.Application do
   use Application
 
   def start(_type, _args) do
-    :ok = TitanCronLogger.attach()
+    :ok = TitanEcronLogger.attach()
     children = [
       {StatefulCron.SendInterval, []},
       {StatefulCron.SendAfter, []},
@@ -14,7 +14,7 @@ defmodule Titan.Application do
   end
 
   def stop(_state) do
-    TitanCronLogger.detach()
+    TitanEcronLogger.detach()
     :ok
   end
 end

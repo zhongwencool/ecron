@@ -36,7 +36,11 @@ handle_event(?Failure, #{run_microsecond := Ms, run_result := {Error, Reason, St
     #{name := Name, mfa := MFA}, _Config) ->
     ?LOG_ERROR("EcronJob(~p)-~p CRASH in ~p microsecond. {Error, Reason}: {~p, ~p}. Stack:~p",
         [Name, MFA, Ms, Error, Reason, Stack]);
-handle_event(?GlobalUp, #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
-    ?LOG_INFO("Ecron Global UP on ~p at -~p ms because of ~p.", [Node, Time, Reason]);
-handle_event(?GlobalDown, #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
-    ?LOG_INFO("Ecron Global DOWN on ~p at -~p ms because of ~p.", [Node, Time, Reason]).
+handle_event(?GlobalUp, #{action_ms := Time, quorum_size := QuorumSize,
+    good_nodes := GoodNodes, bad_nodes := BadNodes}, #{self := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global UP on ~p at ~p quorum_size is ~p good_nodes is ~p bad_nodes is ~p.",
+        [Node, Time, QuorumSize, GoodNodes, BadNodes]);
+handle_event(?GlobalDown, #{action_ms := Time, quorum_size := QuorumSize,
+    good_nodes := GoodNodes, bad_nodes := BadNodes}, #{self := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global DOWN on ~p at ~p quorum_size is ~p good_nodes is ~p bad_nodes is ~p.",
+        [Node, Time, QuorumSize, GoodNodes, BadNodes]).

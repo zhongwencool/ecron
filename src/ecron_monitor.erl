@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 -export([start_link/2]).
-
+-export([health/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
 
 start_link(Name, Jobs) ->
@@ -13,8 +13,8 @@ init([Jobs]) ->
     case ecron_tick:parse_crontab(Jobs, []) of
         {ok, [_ | _]} ->
             erlang:process_flag(trap_exit, true),
-            ok = net_kernel:monitor_nodes(true),
-            {ok, undefined, 5};
+            ok = net_kernel:monitor_nodes(true, [nodedown_reason]),
+            {ok, undefined, 25};
         {stop, Reason} -> {stop, Reason}
     end.
 
@@ -24,14 +24,25 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-handle_info(Reason, State) ->
+handle_info(Msg, State) ->
     QuorumSize = application:get_env(ecron, global_quorum_size, 1),
-    {ResL, _BadNodes} = rpc:multicall(nodes(visible), erlang, whereis, [ecron], 6000),
-    Healthy = lists:foldl(fun(Pid, Acc) -> case is_pid(Pid) of true -> Acc + 1; false -> Acc end end, 1, ResL),
+    {ResL, Bad} = rpc:multicall([node() | nodes(visible)], ?MODULE, health, [], 5000),
+    {Healthy, GoodNodes, BadNodes} = split(ResL, 0, [], Bad),
+    logger:error("-- ~p ----~n", [{Msg, {QuorumSize, ResL, Bad, GoodNodes, BadNodes}}]),
     case Healthy >= QuorumSize of
         true ->
-            {ok, Pid} = ecron_sup:start_global(Reason),
+            {ok, Pid} = ecron_sup:start_global({QuorumSize, GoodNodes, BadNodes}),
             link(Pid);
-        false -> ecron_sup:stop_global(Reason)
+        false -> ecron_sup:stop_global({QuorumSize, GoodNodes, BadNodes})
     end,
     {noreply, State}.
+
+health() ->
+    case erlang:whereis(ecron) of
+        undefined -> {error, node()};
+        _ -> {ok, node()}
+    end.
+
+split([], Len, Good, Bad) -> {Len, Good, Bad};
+split([{ok, Node} | Res], Len, Good, Bad) -> split(Res, Len + 1, [Node | Good], Bad);
+split([{error, Node} | Res], Len, Good, Bad) -> split(Res, Len, Good, [Node | Bad]).

@@ -38,10 +38,14 @@ handle_event([ecron, failure], #{run_microsecond := Ms, run_result := {Error, Re
     #{name := Name, mfa := MFA}, _Config) ->
     ?LOG_ERROR("EcronJob(~p)-~p CRASH in ~p microsecond. {Error, Reason}: {~p, ~p}. Stack:~p",
         [Name, MFA, Ms, Error, Reason, Stack]);
-handle_event([ecron, global, up], #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
-    ?LOG_INFO("Ecron Global UP on ~p at -~p ms because of ~p.", [Node, Time, Reason]);
-handle_event([ecron, global, down], #{action_ms := Time, reason := Reason}, #{node := Node}, _Config) ->
-    ?LOG_INFO("Ecron Global DOWN on ~p at -~p ms because of ~p.", [Node, Time, Reason]).
+handle_event([ecron, global, up], #{action_ms := Time, quorum_size := QuorumSize,
+    good_nodes := GoodNodes, bad_nodes := BadNodes}, #{self := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global UP on ~p at ~p quorum_size is ~p good_nodes is ~p bad_nodes is ~p ~n.",
+        [Node, Time, QuorumSize, GoodNodes, BadNodes]);
+handle_event([ecron, global, down], #{action_ms := Time, quorum_size := QuorumSize,
+    good_nodes := GoodNodes, bad_nodes := BadNodes}, #{self := Node}, _Config) ->
+    ?LOG_INFO("Ecron Global DOWN on ~p at ~p quorum_size is ~p good_nodes is ~p bad_nodes is ~p ~n.",
+        [Node, Time, QuorumSize, GoodNodes, BadNodes]).
 ``` 
 
 Once you have a module like this, you can attach it when your application starts:
@@ -60,7 +64,19 @@ stop(_State) ->
     ok.
 ```
 
-More detail can be seen in [erlang example](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang/apps/titan/src/titan_ecron_logger.erl) and [elixir example](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/apps/titan/lib/titan/titan_cron_logger.ex). 
+More detail can be seen in [erlang example](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang/apps/titan/src/titan_ecron_logger.erl) and [elixir example](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/apps/titan/lib/titan_ecron_logger.ex).
+
+### Metrics
+|     Event             | measurements                                 | metadata                    | Describe                                            |
+| --------------------  | -------------------------------------------- | --------------------------- | --------------------------------------------------- |
+| [ecron, success]      |#{run_microsecond=>Cost, run_result=>Res}     | #{name=>Name, mfa=>MFA}     | Execute MFA successfully                            |
+| [ecron, failure]      |#{run_microsecond=>Cost, run_result=>Res}     | #{name=>Name, mfa=>MFA}     | MFA crashed(unsuccessfully)                         |
+| [ecron, activate]     |#{action_ms => Now}                           | #{name=>Name, mfa=>MFA}     | ecron:add or ecron:activate                         |
+| [ecron, deactivate]   |#{action_ms => Now}                           | #{name=>Name}               | ecron:deactivate                                    |
+| [ecron, delete]       |#{action_ms => Now}                           | #{name=>Name}               | ecron:delete or CurrentTime =:= job's EndDateTime   |
+| [ecron, global, up]   |GlobalMeasurements                            | #{node => node()}           | Global manager process is up                        |
+| [ecron, global, down] |GlobalMeasurements                            | #{node => node()}           | Global manager process is down                      |
 
 
- 
+- `Now = erlang:system_time(millisecond)`.
+- `GlobalMeasurements = #{action_ms=>Now,quorum_size=>integer(),good_nodes=>[node()],bad_nodes=>[node()]}`.
