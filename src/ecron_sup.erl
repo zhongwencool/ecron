@@ -12,7 +12,7 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_global(Reason) ->
+start_global(Measurements) ->
     case supervisor:start_child(?MODULE,
         #{
             id => ?GLOBAL_WORKER,
@@ -23,18 +23,15 @@ start_global(Reason) ->
             modules => [?GLOBAL_WORKER]
         }) of
         {ok, Pid} ->
-            Meta = #{action_ms => erlang:system_time(millisecond), reason => Reason},
-            telemetry:execute(?GlobalUp, Meta, #{node => node()}),
+            telemetry:execute(?GlobalUp, Measurements, #{self => node()}),
             {ok, Pid};
         {error, {already_started, Pid}} -> {ok, Pid};
         {error, {{already_started, Pid}, _}} -> {ok, Pid}
     end.
 
-stop_global(Reason) ->
+stop_global(Measurements) ->
     case supervisor:terminate_child(?MODULE, ?GLOBAL_WORKER) of
-        ok ->
-            Meta = #{action_ms => erlang:system_time(millisecond), reason => Reason},
-            telemetry:execute(?GlobalDown, Meta, #{node => node()});
+        ok -> telemetry:execute(?GlobalDown, Measurements, #{self => node()});
         Err -> Err
     end.
 

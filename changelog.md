@@ -1,3 +1,6 @@
+### 0.5.2
+- redefine `[ecron global up/down]` telemetry event.
+
 ### 0.5.1
 - Replace `cluster_quorum_size` by `global_quorum_size`.
 - Check if job's name is duplicate.
