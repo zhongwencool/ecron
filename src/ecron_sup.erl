@@ -12,7 +12,7 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_global({QuorumSize, GoodNodes, BadNodes}) ->
+start_global(Measurements) ->
     case supervisor:start_child(?MODULE,
         #{
             id => ?GLOBAL_WORKER,
@@ -23,20 +23,15 @@ start_global({QuorumSize, GoodNodes, BadNodes}) ->
             modules => [?GLOBAL_WORKER]
         }) of
         {ok, Pid} ->
-            Measurements = #{action_ms => erlang:system_time(millisecond),
-                quorum_size => QuorumSize, good_nodes => GoodNodes, bad_nodes => BadNodes},
             telemetry:execute(?GlobalUp, Measurements, #{self => node()}),
             {ok, Pid};
         {error, {already_started, Pid}} -> {ok, Pid};
         {error, {{already_started, Pid}, _}} -> {ok, Pid}
     end.
 
-stop_global({QuorumSize, GoodNodes, BadNodes}) ->
+stop_global(Measurements) ->
     case supervisor:terminate_child(?MODULE, ?GLOBAL_WORKER) of
-        ok ->
-            Measurements = #{action_ms => erlang:system_time(millisecond),
-                quorum_size => QuorumSize, good_nodes => GoodNodes, bad_nodes => BadNodes},
-            telemetry:execute(?GlobalDown, Measurements, #{self => node()});
+        ok -> telemetry:execute(?GlobalDown, Measurements, #{self => node()});
         Err -> Err
     end.
 

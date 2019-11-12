@@ -24,16 +24,17 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-handle_info(Msg, State) ->
+handle_info(_Msg, State) ->
     QuorumSize = application:get_env(ecron, global_quorum_size, 1),
     {ResL, Bad} = rpc:multicall([node() | nodes(visible)], ?MODULE, health, [], 5000),
     {Healthy, GoodNodes, BadNodes} = split(ResL, 0, [], Bad),
-    logger:error("-- ~p ----~n", [{Msg, {QuorumSize, ResL, Bad, GoodNodes, BadNodes}}]),
+    Measurements = #{action_ms => erlang:system_time(millisecond),
+        quorum_size => QuorumSize, good_nodes => GoodNodes, bad_nodes => BadNodes},
     case Healthy >= QuorumSize of
         true ->
-            {ok, Pid} = ecron_sup:start_global({QuorumSize, GoodNodes, BadNodes}),
+            {ok, Pid} = ecron_sup:start_global(Measurements),
             link(Pid);
-        false -> ecron_sup:stop_global({QuorumSize, GoodNodes, BadNodes})
+        false -> ecron_sup:stop_global(Measurements)
     end,
     {noreply, State}.
 

@@ -69,13 +69,13 @@ More detail can be seen in [erlang example](https://github.com/zhongwencool/ecro
 ### Metrics
 |     Event             | measurements                                 | metadata                    | Describe                                            |
 | --------------------  | -------------------------------------------- | --------------------------- | --------------------------------------------------- |
-| [ecron, success]      |#{run_microsecond=>Cost, run_result=>Res}     | #{name=>Name, mfa=>MFA}     | Execute MFA successfully                            |
-| [ecron, failure]      |#{run_microsecond=>Cost, run_result=>Res}     | #{name=>Name, mfa=>MFA}     | MFA crashed(unsuccessfully)                         |
-| [ecron, activate]     |#{action_ms => Now}                           | #{name=>Name, mfa=>MFA}     | ecron:add or ecron:activate                         |
-| [ecron, deactivate]   |#{action_ms => Now}                           | #{name=>Name}               | ecron:deactivate                                    |
-| [ecron, delete]       |#{action_ms => Now}                           | #{name=>Name}               | ecron:delete or CurrentTime =:= job's EndDateTime   |
-| [ecron, global, up]   |GlobalMeasurements                            | #{node => node()}           | Global manager process is up                        |
-| [ecron, global, down] |GlobalMeasurements                            | #{node => node()}           | Global manager process is down                      |
+| [ecron, success]      |#{run_microsecond=>[Cost],run_result=>[Res]}  | #{name=>Name,mfa=>MFA}      | Execute MFA successfully                            |
+| [ecron, failure]      |#{run_microsecond=>[Cost],run_result=>[Res]}  | #{name=>Name,mfa=>MFA}      | MFA crashed(unsuccessfully)                         |
+| [ecron, activate]     |#{action_ms=>Now}                             | #{name=>Name,mfa=>MFA}      | ecron:add or ecron:activate                         |
+| [ecron, deactivate]   |#{action_ms=>Now}                             | #{name=>Name}               | ecron:deactivate                                    |
+| [ecron, delete]       |#{action_ms=>Now}                             | #{name=>Name}               | ecron:delete or CurrentTime =:= job's EndDateTime   |
+| [ecron, global, up]   |GlobalMeasurements                            | #{self=>node()}             | Global manager process is up                        |
+| [ecron, global, down] |GlobalMeasurements                            | #{self=>node()}             | Global manager process is down                      |
 
 
 - `Now = erlang:system_time(millisecond)`.
