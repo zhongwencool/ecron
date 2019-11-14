@@ -67,15 +67,15 @@ stop(_State) ->
 More detail can be seen in [erlang example](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang/apps/titan/src/titan_ecron_logger.erl) and [elixir example](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir/apps/titan/lib/titan_ecron_logger.ex).
 
 ### Metrics
-|     Event             | measurements                                 | metadata                    | Describe                                            |
-| --------------------  | -------------------------------------------- | --------------------------- | --------------------------------------------------- |
-| [ecron, success]      |#{run_microsecond=>[Cost],run_result=>[Res]}  | #{name=>Name,mfa=>MFA}      | Execute MFA successfully                            |
-| [ecron, failure]      |#{run_microsecond=>[Cost],run_result=>[Res]}  | #{name=>Name,mfa=>MFA}      | MFA crashed(unsuccessfully)                         |
-| [ecron, activate]     |#{action_ms=>Now}                             | #{name=>Name,mfa=>MFA}      | ecron:add or ecron:activate                         |
-| [ecron, deactivate]   |#{action_ms=>Now}                             | #{name=>Name}               | ecron:deactivate                                    |
-| [ecron, delete]       |#{action_ms=>Now}                             | #{name=>Name}               | ecron:delete or CurrentTime =:= job's EndDateTime   |
-| [ecron, global, up]   |GlobalMeasurements                            | #{self=>node()}             | Global manager process is up                        |
-| [ecron, global, down] |GlobalMeasurements                            | #{self=>node()}             | Global manager process is down                      |
+|     Event   | measurements                             | metadata                    | Describe                                            |
+| ----------- | ---------------------------------------- | --------------------------- | --------------------------------------------------- |
+| success     |#{run_microsecond=>Cost,run_result=>Res}  | #{name=>Name,mfa=>MFA}      | Execute MFA successfully                            |
+| failure     |#{run_microsecond=>Cost,run_result=>Res}  | #{name=>Name,mfa=>MFA}      | MFA crashed(unsuccessfully)                         |
+| activate    |#{action_ms=>Now}                         | #{name=>Name,mfa=>MFA}      | ecron:add or ecron:activate                         |
+| deactivate  |#{action_ms=>Now}                         | #{name=>Name}               | ecron:deactivate                                    |
+| delete      |#{action_ms=>Now}                         | #{name=>Name}               | ecron:delete or CurrentTime =:= job's EndDateTime   |
+| global,up   |GlobalMeasurements                        | #{self=>node()}             | Global manager process is up                        |
+| global,down |GlobalMeasurements                        | #{self=>node()}             | Global manager process is down                      |
 
 
 - `Now = erlang:system_time(millisecond)`.
