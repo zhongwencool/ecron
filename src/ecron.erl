@@ -23,11 +23,12 @@ month => '*' | [1..12 | {1..11, 2..12}, ...],
 day_of_month => '*' | [1..31 | {1..30, 2..31}, ...],
 day_of_week => '*' | [0..6 | {0..5, 1..6}, ...]}.
 
+-type mfargs()   :: {M :: module(), F :: atom(), A :: [term()]}.
 -type ecron() :: #{name => name(),
 crontab => crontab(),
 start_time => calendar:rfc3339_string() | unlimited,
 end_time => calendar:rfc3339_string() | unlimited,
-mfa => mfa(),
+mfa => mfargs(),
 type => cron | every}.
 
 -type status() :: deactivate | activate.
@@ -49,31 +50,31 @@ next => [calendar:datetime()]}.
 -type options() :: [option()].
 
 %% @equiv add(JobName, Spec, MFA, unlimited, unlimited, [])
--spec add(name(), crontab_spec(), mfa()) ->
+-spec add(name(), crontab_spec(), mfargs()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA) ->
     add(JobName, Spec, MFA, unlimited, unlimited, []).
 
 %% @equiv add_with_count(make_ref(), Spec, MFA, RunCount)
--spec add_with_count(crontab_spec(), mfa(), pos_integer()) ->
+-spec add_with_count(crontab_spec(), mfargs(), pos_integer()) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
     add_with_count(make_ref(), Spec, MFA, RunCount).
 
 %% @equiv add(make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
--spec add_with_count(name(), crontab_spec(), mfa(), pos_integer()) ->
+-spec add_with_count(name(), crontab_spec(), mfargs(), pos_integer()) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_count(JobName, Spec, MFA, RunCount) when is_integer(RunCount) ->
     add(JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
 
 %% @equiv add(make_ref(), Spec, MFA, Start, End, [])
--spec add_with_datetime(crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
+-spec add_with_datetime(crontab_spec(), mfargs(), start_datetime(), end_datetime()) ->
     {ok, name()} | {error, parse_error(), term()}.
 add_with_datetime(Spec, MFA, Start, End) ->
     add(make_ref(), Spec, MFA, Start, End, []).
 
 %% @equiv add(JobName, Spec, MFA, Start, End, [])
--spec add_with_datetime(name(), crontab_spec(), mfa(), start_datetime(), end_datetime()) ->
+-spec add_with_datetime(name(), crontab_spec(), mfargs(), start_datetime(), end_datetime()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add_with_datetime(JobName, Spec, MFA, Start, End) ->
     add(JobName, Spec, MFA, Start, End, []).
@@ -91,7 +92,7 @@ add_with_datetime(JobName, Spec, MFA, Start, End) ->
 %% </li>
 %% </ul>
 %%
--spec add(name(), crontab_spec(), mfa(), start_datetime(), end_datetime(), options()) ->
+-spec add(name(), crontab_spec(), mfargs(), start_datetime(), end_datetime(), options()) ->
     {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA, Start, End, Option) ->
     case valid_datetime(Start, End) of
@@ -203,17 +204,18 @@ reload() ->
 -spec parse_spec(crontab_spec(), pos_integer()) ->
     {ok, #{type => cron | every, crontab => crontab_spec(), next => [calendar:rfc3339_string()]}} |
     {error, atom(), term()}.
-parse_spec({ok, Type, JobSpec}, Num) ->
-    Job = #{type => Type, crontab => JobSpec},
-    Next = ecron_tick:predict_datetime(Job, Num),
-    {ok, Job#{next => Next}};
-parse_spec({error, _Field, _Value} = Error, _Num) -> Error;
 parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
-    parse_spec(parse_spec(Spec), Num).
+    parse_spec_2(parse_spec(Spec), Num).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+parse_spec_2({ok, Type, JobSpec}, Num) ->
+    Job = #{type => Type, crontab => JobSpec},
+    Next = ecron_tick:predict_datetime(Job, Num),
+    {ok, Job#{next => Next}};
+parse_spec_2({error, _Field, _Value} = Error, _Num) -> Error.
+
 %% @private
 valid_datetime(Start, End) ->
     case valid_datetime(Start) andalso valid_datetime(End) of

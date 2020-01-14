@@ -9,6 +9,7 @@ otp_release:
   - 21.0
 script:
   - ./rebar3 as test get-deps
+  - ./rebar3 xref
   - epmd -daemon
   - ./rebar3 as test proper -c
   - ./rebar3 as test ct -c

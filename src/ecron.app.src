@@ -1,6 +1,6 @@
 {application, ecron,
     [{description, "cron-like/crontab job scheduling library"},
-        {vsn, "0.5.2"},
+        {vsn, "0.5.3"},
         {registered, [ecron_sup, ecron, ecron_monitor]},
         {mod, {ecron_app, []}},
         {applications, [kernel, stdlib, telemetry]},
