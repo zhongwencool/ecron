@@ -5,6 +5,7 @@
 -export([start_link/2]).
 -export([health/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2]).
+-include("ecron.hrl").
 
 start_link(Name, Jobs) ->
     gen_server:start_link(Name, ?MODULE, [Jobs], []).
@@ -39,7 +40,7 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 health() ->
-    case erlang:whereis(ecron) of
+    case erlang:whereis(?LocalJob) of
         undefined -> {error, node()};
         _ -> {ok, node()}
     end.

@@ -124,11 +124,11 @@ prop_unknown() ->
     ?FORALL(Message, term(),
         begin
             application:ensure_all_started(ecron),
-            Pid = erlang:whereis(?Ecron),
+            Pid = erlang:whereis(?LocalJob),
             CallRes = (catch gen_server:call(Pid, Message, 100)),
             gen_server:cast(Pid, Message),
             erlang:send(Pid, Message),
-            NewPid = erlang:whereis(?Ecron),
+            NewPid = erlang:whereis(?LocalJob),
             Pid =:= NewPid andalso
                 {'EXIT', {timeout, {gen_server, call, [Pid, Message, 100]}}} =:= CallRes
         end).
@@ -146,10 +146,10 @@ prop_restart_server() ->
             application:ensure_all_started(ecron),
             {ok, Name} = ecron:add(Name, "@yearly", {io, format, ["Yearly~n"]}),
             Res1 = ecron:statistic(Name),
-            Pid = erlang:whereis(?Ecron),
+            Pid = erlang:whereis(?LocalJob),
             erlang:exit(Pid, kill),
             timer:sleep(200),
-            NewPid = erlang:whereis(?Ecron),
+            NewPid = erlang:whereis(?LocalJob),
             Res2 = ecron:statistic(Name),
             ok = ecron:delete(Name),
             error_logger:tty(true),

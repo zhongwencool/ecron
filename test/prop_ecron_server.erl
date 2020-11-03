@@ -30,7 +30,7 @@ prop_server() ->
             application:ensure_all_started(ecron),
             ecron_tick:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),
-            ets:delete_all_objects(?Job),
+            ets:delete_all_objects(?LocalJob),
             ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
                 [History, State, Result]),
                 aggregate(command_names(Cmds), Result =:= ok))
