@@ -10,4 +10,5 @@ start(_StartType, _StartArgs) ->
     ecron_sup:start_link().
 
 stop(_State) ->
+    rpc:abcast(nodes(), ?MONITOR_WORKER, {node(), ecron, stop}),
     ok.

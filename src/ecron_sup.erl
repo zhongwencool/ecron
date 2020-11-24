@@ -17,7 +17,7 @@ start_global(Measurements) ->
     case supervisor:start_child(?MODULE,
         #{
             id => ?GLOBAL_WORKER,
-            start => {ecron_tick, start_link, [{global, ?GlobalJob}, GlobalJobs]},
+            start => {ecron, start_link, [{global, ?GlobalJob}, GlobalJobs]},
             restart => temporary,
             shutdown => 1000,
             type => worker,

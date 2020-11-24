@@ -56,7 +56,7 @@ prop_application_error_config() ->
             Res =
                 case T of
                     {error, {{shutdown,
-                        {failed_to_start_child, ecron_tick,
+                        {failed_to_start_child, ecron,
                             Reason}}, {ecron_app, start, [normal, []]}}} ->
                         lists:member(Reason, [
                             {test, error_format},

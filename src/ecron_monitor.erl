@@ -39,7 +39,7 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 health() ->
-    case erlang:whereis(?LocalJob) of
+    case erlang:whereis(?MONITOR_WORKER) of
         undefined -> {error, node()};
         _ -> {ok, node()}
     end.
