@@ -2,6 +2,7 @@
 -module(ecron_app).
 
 -behaviour(application).
+
 -include_lib("ecron.hrl").
 
 -export([start/2, stop/1]).

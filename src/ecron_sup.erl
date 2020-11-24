@@ -1,6 +1,8 @@
 %%% @private
 -module(ecron_sup).
+
 -behaviour(supervisor).
+
 -include("ecron.hrl").
 
 -export([start_global/1, stop_global/1]).
@@ -14,20 +16,26 @@ start_link() ->
 
 start_global(Measurements) ->
     GlobalJobs = application:get_env(?Ecron, global_jobs, []),
-    case supervisor:start_child(?MODULE,
-        #{
-            id => ?GLOBAL_WORKER,
-            start => {ecron, start_link, [{global, ?GlobalJob}, GlobalJobs]},
-            restart => temporary,
-            shutdown => 1000,
-            type => worker,
-            modules => [?GLOBAL_WORKER]
-        }) of
+    case
+        supervisor:start_child(
+            ?MODULE,
+            #{
+                id => ?GLOBAL_WORKER,
+                start => {ecron, start_link, [{global, ?GlobalJob}, GlobalJobs]},
+                restart => temporary,
+                shutdown => 1000,
+                type => worker,
+                modules => [?GLOBAL_WORKER]
+            }
+        )
+    of
         {ok, Pid} ->
             telemetry:execute(?GlobalUp, Measurements, #{self => node()}),
             {ok, Pid};
-        {error, {already_started, Pid}} -> {ok, Pid};
-        {error, {{already_started, Pid}, _}} -> {ok, Pid}
+        {error, {already_started, Pid}} ->
+            {ok, Pid};
+        {error, {{already_started, Pid}, _}} ->
+            {ok, Pid}
     end.
 
 stop_global(Measurements) ->
@@ -53,16 +61,16 @@ init([]) ->
         modules => [?LOCAL_WORKER]
     },
     case GlobalJobs of
-        [] -> {ok, {SupFlags, [Local]}};
+        [] ->
+            {ok, {SupFlags, [Local]}};
         _ ->
-            Global =
-                #{
-                    id => ?MONITOR_WORKER,
-                    start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
-                    restart => permanent,
-                    shutdown => 1000,
-                    type => worker,
-                    modules => [?MONITOR_WORKER]
-                },
+            Global = #{
+                id => ?MONITOR_WORKER,
+                start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
+                restart => permanent,
+                shutdown => 1000,
+                type => worker,
+                modules => [?MONITOR_WORKER]
+            },
             {ok, {SupFlags, [Local, Global]}}
     end.

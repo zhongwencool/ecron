@@ -75,7 +75,10 @@ predict_cron_datetime(Start, End, Job, {TimeZone, Now}, Num, Acc) ->
     Next = next_schedule_datetime(Job, Now),
     case in_range(Next, Start, End) of
         already_ended -> lists:reverse(Acc);
-        deactivate -> predict_cron_datetime(Start, End, Job, {TimeZone, Start}, Num, Acc);
+        deactivate ->
+            FSeconds = calendar:datetime_to_gregorian_seconds(Start) - 1,
+            NewStart = calendar:gregorian_seconds_to_datetime(FSeconds),
+            predict_cron_datetime(Start, End, Job, {TimeZone, NewStart}, Num, Acc);
         running ->
             predict_cron_datetime(Start, End, Job, {TimeZone, Next},
                 Num - 1, [to_rfc3339(TimeZone, Next) | Acc])

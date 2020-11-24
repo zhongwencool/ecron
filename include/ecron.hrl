@@ -3,7 +3,8 @@
 -define(GlobalJob, ecron_global).
 -define(Ecron, ecron).
 
--define(MAX_TIMEOUT, 4294967). %% (16#ffffffff div 1000) 49.71 days.
+%% (16#ffffffff div 1000) 49.71 days.
+-define(MAX_TIMEOUT, 4294967).
 -define(Success, [ecron, success]).
 -define(Failure, [ecron, failure]).
 -define(Activate, [ecron, activate]).
@@ -12,5 +13,14 @@
 -define(GlobalUp, [ecron, global, up]).
 -define(GlobalDown, [ecron, global, down]).
 
--record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
-    link = undefined, result = [], run_microsecond = []}).
+-record(job, {
+    name,
+    status = activate,
+    job,
+    opts = [],
+    ok = 0,
+    failed = 0,
+    link = undefined,
+    result = [],
+    run_microsecond = []
+}).
