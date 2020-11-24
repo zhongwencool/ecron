@@ -70,15 +70,15 @@ check_day_of_month([_S, _M, _H, _DOM, "*", _DOW]) -> true;
 check_day_of_month([_S, _M, _H, DOM, Month, _DOW]) ->
     DOMExtend = unzip(field_to_extend(DOM)),
     MonthExtend = unzip(field_to_extend(Month)),
-    ecron:get_max_day_of_months(MonthExtend) >= lists:max(DOMExtend).
+    ecron_spec:get_max_day_of_months(MonthExtend) >= lists:max(DOMExtend).
 
 field_to_extend("*") -> '*';
-field_to_extend({'*/Step', _Type, MinLimit, MaxLimit, Step}) -> ecron:zip(lists:seq(MinLimit, MaxLimit, Step));
+field_to_extend({'*/Step', _Type, MinLimit, MaxLimit, Step}) -> ecron_spec:zip(lists:seq(MinLimit, MaxLimit, Step));
 field_to_extend({'Integer', _Type, Int}) -> [Int];
-field_to_extend({'Min-Max', _Type, Min, Max}) -> ecron:zip(lists:seq(Min, Max));
-field_to_extend({'Min/Step', _Type, Min, MaxLimit, Step}) -> ecron:zip(lists:seq(Min, MaxLimit, Step));
-field_to_extend({'Min-Max/Step', _Type, Min, Max, Step}) -> ecron:zip(lists:seq(Min, Max, Step));
-field_to_extend({list, _Type, List}) -> ecron:zip(unzip(lists:flatten([field_to_extend(L) || L <- List]))).
+field_to_extend({'Min-Max', _Type, Min, Max}) -> ecron_spec:zip(lists:seq(Min, Max));
+field_to_extend({'Min/Step', _Type, Min, MaxLimit, Step}) -> ecron_spec:zip(lists:seq(Min, MaxLimit, Step));
+field_to_extend({'Min-Max/Step', _Type, Min, Max, Step}) -> ecron_spec:zip(lists:seq(Min, Max, Step));
+field_to_extend({list, _Type, List}) -> ecron_spec:zip(unzip(lists:flatten([field_to_extend(L) || L <- List]))).
 
 to_ms(unlimited) -> unlimited;
 to_ms(Time) -> calendar:rfc3339_to_system_time(Time, [{unit, millisecond}]).

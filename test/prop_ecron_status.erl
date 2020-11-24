@@ -171,7 +171,7 @@ prop_singleton() ->
             application:start(ecron),
             {ok, Name} = ecron:add(Name, "@every 1s", {timer, sleep, [1100]}, unlimited, unlimited, [{singleton, Singleton}]),
             timer:sleep(4200),
-            {ok, Res} = ecron_tick:statistic(Name),
+            {ok, Res} = ecron:statistic(Name),
             #{start_time := unlimited, end_time := unlimited, status := activate,
                 failed := 0, ok := Ok, results := Results, run_microsecond := RunMs
             } = Res,
@@ -215,7 +215,7 @@ prop_ecron_send_interval() ->
             Res1 = receive Message -> ok after 1100 -> error end,
             Res2 = receive Message -> ok after 1100 -> error end,
             Res3 = receive Message -> ok after 1100 -> error end,
-            {ok, Res} = ecron_tick:statistic(Job),
+            {ok, Res} = ecron:statistic(Job),
             #{start_time := unlimited, end_time := unlimited, status := activate,
                 failed := 0, ok := Ok, results := Results, run_microsecond := RunMs
             } = Res,
@@ -240,7 +240,7 @@ prop_auto_remove() ->
             EndTime = calendar:system_time_to_local_time(EndMs, millisecond),
             {ok, Name} = ecron:add_with_datetime(Name, "@every 1s", {timer, sleep, [500]}, unlimited, EndTime),
             timer:sleep(Shift + 100),
-            Result = ecron_tick:statistic(Name),
+            Result = ecron:statistic(Name),
             Result =:= {error, not_found}
         end).
 

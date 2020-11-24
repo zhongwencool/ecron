@@ -11,3 +11,6 @@
 -define(Delete, [ecron, delete]).
 -define(GlobalUp, [ecron, global, up]).
 -define(GlobalDown, [ecron, global, down]).
+
+-record(job, {name, status = activate, job, opts = [], ok = 0, failed = 0,
+    link = undefined, result = [], run_microsecond = []}).

@@ -70,7 +70,7 @@ prop_application_error_config() ->
         end).
 
 check_spec(Actual, SpecStr) ->
-    {error, Field, Reason} = ecron:parse_spec(SpecStr),
+    {error, Field, Reason} = ecron_spec:parse_spec(SpecStr),
     Expect = lists:flatten(io_lib:format("~p: ~p", [Field, Reason])),
     Actual =:= Expect.
     

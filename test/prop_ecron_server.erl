@@ -28,7 +28,7 @@ prop_server() ->
             application:set_env(ecron, local_jobs, []),
             application:set_env(ecron, global_jobs, []),
             application:ensure_all_started(ecron),
-            ecron_tick:clear(),
+            ecron:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),
             ets:delete_all_objects(?LocalJob),
             ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
@@ -171,7 +171,7 @@ next_state(State, _Res, {call, _Mod, _Fun, _Args}) -> State.
 new_cron([Name, Spec, MFA]) ->
     new_cron([Name, Spec, MFA, {unlimited, unlimited}]);
 new_cron([Name, Spec, MFA, {Start, End}]) ->
-    {ok, Type, Crontab} = ecron:parse_spec(Spec),
+    {ok, Type, Crontab} = ecron_spec:parse_spec(Spec),
     #{type => Type, name => Name,
         crontab => Crontab, mfa => MFA,
         start_time => Start, end_time => End
@@ -193,11 +193,11 @@ check_add_with_limit([Spec, _MFA, {StartTime, EndTime}], {error, already_ended})
     is_expired(Spec, StartTime, EndTime).
 
 is_expired(Spec, StartTime, EndTime) ->
-    TZ = ecron_tick:get_time_zone(),
-    {ok, Type, Job} = ecron:parse_spec(Spec),
-    Start = ecron_tick:datetime_to_millisecond(TZ, StartTime),
-    End = ecron_tick:datetime_to_millisecond(TZ, EndTime),
-    [] =:= ecron_tick:predict_datetime(activate, #{type => Type, crontab => Job}, Start, End, 10, TZ, erlang:system_time(millisecond)).
+    TZ = ecron:get_time_zone(),
+    {ok, Type, Job} = ecron_spec:parse_spec(Spec),
+    Start = ecron:datetime_to_millisecond(TZ, StartTime),
+    End = ecron:datetime_to_millisecond(TZ, EndTime),
+    [] =:= ecron:predict_datetime(activate, #{type => Type, crontab => Job}, Start, End, 10, TZ, erlang:system_time(millisecond)).
 
 add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).

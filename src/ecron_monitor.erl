@@ -8,16 +8,15 @@
 -include("ecron.hrl").
 
 start_link(Name, Jobs) ->
-    gen_server:start_link(Name, ?MODULE, [Jobs], []).
-
-init([Jobs]) ->
     case ecron_tick:parse_crontab(Jobs, []) of
-        {ok, [_ | _]} ->
-            erlang:process_flag(trap_exit, true),
-            ok = net_kernel:monitor_nodes(true, [nodedown_reason]),
-            {ok, undefined, 25};
-        {stop, Reason} -> {stop, Reason}
+        {ok, [_ | _]} -> gen_server:start_link(Name, ?MODULE, [], []);
+        {error, Reason} -> {error, Reason}
     end.
+
+init([]) ->
+    erlang:process_flag(trap_exit, true),
+    ok = net_kernel:monitor_nodes(true, [nodedown_reason]),
+    {ok, undefined, 25}.
 
 handle_call(_Request, _From, State) ->
     {reply, error, State}.

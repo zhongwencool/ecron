@@ -6,7 +6,7 @@
 -export([start_global/1, stop_global/1]).
 -export([start_link/0, init/1]).
 
--define(LOCAL_WORKER, ecron_tick).
+-define(LOCAL_WORKER, ecron).
 -define(GLOBAL_WORKER, ecron_global).
 
 start_link() ->
@@ -39,7 +39,6 @@ stop_global(Measurements) ->
 init([]) ->
     LocalJobs = application:get_env(?Ecron, local_jobs, []),
     GlobalJobs = application:get_env(?Ecron, global_jobs, []),
-    ?LocalJob = ets:new(?LocalJob, [named_table, set, public, {keypos, 2}]),
     SupFlags = #{
         strategy => one_for_one,
         intensity => 100,
@@ -53,21 +52,17 @@ init([]) ->
         type => worker,
         modules => [?LOCAL_WORKER]
     },
-    Worker =
-        case GlobalJobs of
-            [] -> [Local];
-            _ ->
-                ?GlobalJob = ets:new(?GlobalJob, [named_table, set, public, {keypos, 2}]),
-                [
-                    Local,
-                    #{
-                        id => ?MONITOR_WORKER,
-                        start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
-                        restart => permanent,
-                        shutdown => 1000,
-                        type => worker,
-                        modules => [?MONITOR_WORKER]
-                    }
-                ]
-        end,
-    {ok, {SupFlags, Worker}}.
+    case GlobalJobs of
+        [] -> {ok, {SupFlags, [Local]}};
+        _ ->
+            Global =
+                #{
+                    id => ?MONITOR_WORKER,
+                    start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
+                    restart => permanent,
+                    shutdown => 1000,
+                    type => worker,
+                    modules => [?MONITOR_WORKER]
+                },
+            {ok, {SupFlags, [Local, Global]}}
+    end.
