@@ -6,10 +6,35 @@
 %% API
 -export([parse_spec/1]).
 -export([parse_crontab/2]).
--export([is_start_end_datetime/2]).
+-export([parse_start_end_time/2]).
 -export([parse_valid_opts/1]).
+-export([valid_time/4]).
 
 %% @private
+
+valid_time(cron, {SH, SM, SS}, {EH, EM, ES}, CronTab) ->
+    Start = SH * 3600 + SM * 60 + SS,
+    End = EH * 3600 + EM * 60 + ES,
+    case End > Start of
+        false ->
+            false;
+        true ->
+            #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = CronTab,
+            Hour = parse_max(23, HourSpec),
+            Minute = parse_max(59, MinuteSpec),
+            Second = parse_max(59, SecondSpec),
+            Spec = Hour * 3600 + Minute * 60 + Second,
+            Spec >= Start andalso Spec =< End
+    end;
+valid_time(every, {SH, SM, SS}, {EH, EM, ES}, _CronTab) ->
+    ((EH - SH) * 3600 + (EM - SM) * 60 + (ES - SS)) >= 0.
+
+parse_max(Max, '*') -> Max;
+parse_max(_DefaultMax, List) ->
+    case lists:last(List) of
+        {_, Max} -> Max;
+        Max -> Max
+    end.
 
 % Run once a year, midnight, Jan. 1st
 parse_spec("@yearly") ->
@@ -322,8 +347,8 @@ parse_crontab([L | _], _Acc) ->
     {error, L}.
 
 parse_job(JobName, Spec, MFA, Start, End, Opts) ->
-    case is_start_end_datetime(Start, End) of
-        true ->
+    case parse_start_end_time(Start, End) of
+        {StartTime, EndTime} ->
             case parse_spec(Spec) of
                 {ok, Type, Crontab} ->
                     Job = #{
@@ -331,8 +356,8 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
                         name => JobName,
                         crontab => Crontab,
                         mfa => MFA,
-                        start_time => Start,
-                        end_time => End
+                        start_time => StartTime,
+                        end_time => EndTime
                     },
                     {ok, #job{
                         name = JobName,
@@ -352,24 +377,32 @@ parse_valid_opts(Opts) ->
     MaxCount = proplists:get_value(max_count, Opts, unlimited),
     [{singleton, Singleton}, {max_count, MaxCount}].
 
-is_start_end_datetime(Start, End) ->
-    case is_datetime(Start) andalso is_datetime(End) of
-        true when Start =/= unlimited andalso End =/= unlimited ->
-            EndSec = calendar:datetime_to_gregorian_seconds(End),
-            StartSec = calendar:datetime_to_gregorian_seconds(Start),
-            EndSec > StartSec;
-        Res ->
-            Res
+parse_start_end_time(Start, End) ->
+    case {Start, End} of
+        {unlimited, unlimited} ->
+            {{0, 0, 0}, {23, 59, 59}};
+        {unlimited, _} ->
+            case datetime(End) of
+                false -> false;
+                true -> {{0, 0, 0}, End}
+            end;
+        {_, unlimited} ->
+            case datetime(Start) of
+                false -> false;
+                true -> {Start, {23, 59, 59}}
+            end;
+        _ ->
+            case datetime(Start) andalso datetime(End) of
+                true -> {Start, End};
+                false -> false
+            end
     end.
 
-is_datetime(unlimited) ->
-    true;
-is_datetime({Date, {H, M, S}}) ->
+datetime({H, M, S}) ->
     (is_integer(H) andalso H >= 0 andalso H =< 23) andalso
         (is_integer(M) andalso M >= 0 andalso M =< 59) andalso
-        (is_integer(S) andalso S >= 0 andalso H =< 59) andalso
-        calendar:valid_date(Date);
-is_datetime(_ErrFormat) ->
+        (is_integer(S) andalso S >= 0 andalso H =< 59);
+datetime(_ErrFormat) ->
     false.
 
 %% For PropEr Test

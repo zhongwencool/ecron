@@ -16,19 +16,15 @@ start_link() ->
 
 start_global(Measurements) ->
     GlobalJobs = application:get_env(?Ecron, global_jobs, []),
-    case
-        supervisor:start_child(
-            ?MODULE,
-            #{
-                id => ?GLOBAL_WORKER,
-                start => {ecron, start_link, [{global, ?GlobalJob}, GlobalJobs]},
-                restart => temporary,
-                shutdown => 1000,
-                type => worker,
-                modules => [?GLOBAL_WORKER]
-            }
-        )
-    of
+    GlobalSpec = #{
+        id => ?GLOBAL_WORKER,
+        start => {ecron, start_link, [{global, ?GlobalJob}, GlobalJobs]},
+        restart => temporary,
+        shutdown => 1000,
+        type => worker,
+        modules => [?GLOBAL_WORKER]
+    },
+    case supervisor:start_child(?MODULE, GlobalSpec) of
         {ok, Pid} ->
             telemetry:execute(?GlobalUp, Measurements, #{self => node()}),
             {ok, Pid};
@@ -52,7 +48,7 @@ init([]) ->
         intensity => 100,
         period => 30
     },
-    Local = #{
+    LocalSpec = #{
         id => ?LOCAL_WORKER,
         start => {?LOCAL_WORKER, start_link, [{local, ?LocalJob}, LocalJobs]},
         restart => permanent,
@@ -60,17 +56,20 @@ init([]) ->
         type => worker,
         modules => [?LOCAL_WORKER]
     },
-    case GlobalJobs of
-        [] ->
-            {ok, {SupFlags, [Local]}};
-        _ ->
-            Global = #{
-                id => ?MONITOR_WORKER,
-                start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
-                restart => permanent,
-                shutdown => 1000,
-                type => worker,
-                modules => [?MONITOR_WORKER]
-            },
-            {ok, {SupFlags, [Local, Global]}}
-    end.
+    GlobalSpec =
+        case application:get_env(?Ecron, global_jobs, []) of
+            [] ->
+                [];
+            GlobalJobs ->
+                [
+                    #{
+                        id => ?MONITOR_WORKER,
+                        start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
+                        restart => permanent,
+                        shutdown => 1000,
+                        type => worker,
+                        modules => [?MONITOR_WORKER]
+                    }
+                ]
+        end,
+    {ok, {SupFlags, [LocalSpec | GlobalSpec]}}.

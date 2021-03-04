@@ -39,7 +39,7 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 0.5"}]
+    [{:ecron, "~> 0.6"}]
   end
 ```
 
@@ -63,8 +63,8 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
          {extend_crontab_job, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
          {alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
          {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
-         %% Runs 0-23 o'clock since {{2019,9,26},{0,0,0}}.
-         {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited},
+         %% Runs every 15 minutes between {8,20,0} and {23, 59, 59}.
+         %% {limit_time_job, "*/15 * * * *", {io, format, ["Runs 0, 15, 30, 45 minutes after 8:20am~n"]}, {8,20,0}, unlimited}
          %% parallel job         
          {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
      ]},
@@ -275,7 +275,7 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 
 >Note: The interval doesn't take the job runtime into account. 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
->it also has 5 minutes of idle time between each run.
+>it only has 2 minutes of idle time between each run.
   
 ## Test
 

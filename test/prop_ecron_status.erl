@@ -4,12 +4,8 @@
 
 -export([prop_cron_apply_ok/0, prop_cron_apply_ok/1]).
 -export([prop_cron_apply_error/0, prop_cron_apply_error/1]).
--export([prop_already_end/0, prop_already_end/1]).
--export([prop_deactivate/0, prop_deactivate/1]).
 -export([prop_unknown/0, prop_unknown/1]).
 -export([prop_singleton/0, prop_singleton/1]).
--export([prop_auto_remove/0, prop_auto_remove/1]).
--export([prop_deactivate_already_ended/0, prop_deactivate_already_ended/1]).
 -export([prop_restart_server/0, prop_restart_server/1]).
 -export([prop_send_after/0, prop_send_after/1]).
 -export([prop_ecron_send_interval/0, prop_ecron_send_interval/1]).
@@ -63,7 +59,7 @@ prop_cron_apply_error() ->
             {ok, Name} = ecron:add(Name, "@every 1s", MFA),
             timer:sleep(1100),
             {ok, #{crontab := CronSpec,
-                end_time := unlimited, start_time := unlimited,
+                start_time := {0, 0, 0}, end_time := {23, 59, 59},
                 mfa := RMFA, name := RName,
                 failed := Failed, ok := Ok,
                 results := Result}} = ecron:statistic(Name),
@@ -75,47 +71,6 @@ prop_cron_apply_error() ->
                 Ok =:= 0 andalso
                 Failed =:= length(Result) andalso
                 lists:all(fun(R) -> {element(1, R), element(2, R)} =:= {error, function_clause} end, Result)
-        end).
-
-prop_already_end(doc) -> "check already_end failed";
-prop_already_end(opts) -> [{numtests, 300}].
-prop_already_end() ->
-    ?FORALL({Name, Request, Shift}, {name(), term(), range(100, 1000)},
-        begin
-            application:set_env(ecron, local_jobs, []),
-            application:ensure_all_started(ecron),
-            EndTime = reduce_time(Shift),
-            Name1 = {1, Name},
-            Err1 = ecron:add_with_datetime(Name, "* * * * * *", {?MODULE, echo, [self(), Request]}, unlimited, EndTime),
-            Err2 = ecron:add_with_datetime(Name1, "@every 1s", {?MODULE, echo, [self(), Request]}, unlimited, EndTime),
-            Err3 = ecron:statistic(Name),
-            Err4 = ecron:statistic(Name1),
-            Err1 =:= {error, already_ended} andalso
-                Err2 =:= {error, already_ended} andalso
-                Err3 =:= {error, not_found} andalso
-                Err4 =:= {error, not_found}
-        end).
-
-prop_deactivate(doc) -> "deactive failed";
-prop_deactivate(opts) -> [{numtests, 10}].
-prop_deactivate() ->
-    ?FORALL({Name, Request, Shift}, {name(), term(), range(3, 4)},
-        begin
-            application:set_env(ecron, local_jobs, []),
-            application:set_env(ecron, adjusting_time_second, 1),
-            application:ensure_all_started(ecron),
-            StartTime = add_time(Shift),
-            {ok, Name} = ecron:add_with_datetime(Name, "* * * * * *", {fun echo/2, [self(), Request]}, StartTime, unlimited),
-            {ok, #{status := Activate}} = ecron:statistic(Name),
-            ok = ecron:deactivate(Name),
-            {ok, #{status := Deactivate}} = ecron:statistic(Name),
-            ok = ecron:activate(Name),
-            timer:sleep(Shift * 1000 + 60),
-            Res = check_normal_response(Request, Shift, 2),
-            ok = ecron:delete(Name),
-            {error, not_found} = ecron:statistic(Name),
-            application:set_env(ecron, adjusting_time_second, 100000),
-            Deactivate =:= deactivate andalso Activate =:= activate andalso Res
         end).
 
 prop_unknown(doc) -> "unknown message";
@@ -172,7 +127,7 @@ prop_singleton() ->
             {ok, Name} = ecron:add(Name, "@every 1s", {timer, sleep, [1100]}, unlimited, unlimited, [{singleton, Singleton}]),
             timer:sleep(4200),
             {ok, Res} = ecron:statistic(Name),
-            #{start_time := unlimited, end_time := unlimited, status := activate,
+            #{start_time := {0, 0, 0}, end_time := {23, 59, 59}, status := activate,
                 failed := 0, ok := Ok, results := Results, run_microsecond := RunMs
             } = Res,
             ecron:delete(Name),
@@ -216,52 +171,17 @@ prop_ecron_send_interval() ->
             Res2 = receive Message -> ok after 1100 -> error end,
             Res3 = receive Message -> ok after 1100 -> error end,
             {ok, Res} = ecron:statistic(Job),
-            #{start_time := unlimited, end_time := unlimited, status := activate,
+            #{start_time := {0,0,0}, end_time := {23,59,59}, status := activate,
                 failed := 0, ok := Ok, results := Results, run_microsecond := RunMs
             } = Res,
             erlang:send(Target, {exit, self()}),
             Res4 = receive exit -> ok after 800 -> error end,
             timer:sleep(160),
             {error, not_found} = ecron:statistic(Job),
-            {ok, Job1} = ecron:send_interval("0 1 1 * * *", Message, unlimited, unlimited, []),
+            {ok, Job1} = ecron:send_interval(ecron_local, make_ref(), "0 1 1 * * *", Message, unlimited, unlimited, []),
             error_logger:tty(true),
             Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res1 =:= ok andalso Res4 =:= ok andalso
                 length(Results) =:= Ok andalso length(RunMs) =:= Ok andalso Job1 =/= Job
-        end).
-
-prop_auto_remove(doc) -> "auto remove after already_ended";
-prop_auto_remove(opts) -> [{numtests, 5}].
-prop_auto_remove() ->
-    ?FORALL(Name, term(),
-        begin
-            application:ensure_all_started(ecron),
-            Shift = 2000,
-            EndMs = erlang:system_time(millisecond) + Shift,
-            EndTime = calendar:system_time_to_local_time(EndMs, millisecond),
-            {ok, Name} = ecron:add_with_datetime(Name, "@every 1s", {timer, sleep, [500]}, unlimited, EndTime),
-            timer:sleep(Shift + 100),
-            Result = ecron:statistic(Name),
-            Result =:= {error, not_found}
-        end).
-
-prop_deactivate_already_ended(doc) -> "auto remove after already_ended";
-prop_deactivate_already_ended(opts) -> [{numtests, 5}].
-prop_deactivate_already_ended() ->
-    ?FORALL(Name, term(),
-        begin
-            application:ensure_all_started(ecron),
-            Shift = 2000,
-            Now = erlang:system_time(millisecond),
-            EndMs = Now + Shift,
-            EndTime = calendar:system_time_to_local_time(EndMs, millisecond),
-            StartMs = Now - Shift,
-            StartTime = calendar:system_time_to_local_time(StartMs, millisecond),
-            {error, invalid_time, {EndTime, StartTime}} = ecron:add_with_datetime("@every 1s", {timer, sleep, [500]}, EndTime, StartTime),
-            {ok, Name} = ecron:add_with_datetime(Name, "@every 1s", {timer, sleep, [500]}, unlimited, EndTime),
-            ok = ecron:deactivate(Name),
-            timer:sleep(Shift + 100),
-            Result = ecron:activate(Name),
-            Result =:= {error, already_ended}
         end).
 
 prop_add_with_count(doc) -> "add_with_count";
@@ -299,16 +219,6 @@ check_normal_response(Msg, Number, Ms, LastMs) ->
     end.
 
 now_millisecond() -> erlang:system_time(millisecond).
-
-reduce_time(Shift) ->
-    Now = calendar:local_time(),
-    calendar:gregorian_seconds_to_datetime(
-        calendar:datetime_to_gregorian_seconds(Now) - Shift).
-
-add_time(Shift) ->
-    Now = calendar:local_time(),
-    calendar:gregorian_seconds_to_datetime(
-        calendar:datetime_to_gregorian_seconds(Now) + Shift).
 
 store() ->
     receive

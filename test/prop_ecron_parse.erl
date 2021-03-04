@@ -4,7 +4,6 @@
 
 -export([prop_zip/0, prop_zip/1]).
 -export([prop_max_day_of_months/0, prop_max_day_of_months/1]).
--export([prop_valid_datetime/0, prop_valid_datetime/1]).
 -export([prop_spec_extend/0, prop_spec_extend/1]).
 -export([prop_spec_standard/0, prop_spec_standard/1]).
 -export([prop_spec_predefined/0, prop_spec_predefined/1]).
@@ -33,12 +32,6 @@ prop_max_day_of_months() ->
             Expect = lists:max(lists:map(fun prop_ecron:max_day_of_month/1, List)),
             Expect =:= Actual
         end).
-
-prop_valid_datetime(doc) -> "ecron_spec:is_start_end_ok/2 failed";
-prop_valid_datetime(opts) -> [{numtests, 4000}].
-prop_valid_datetime() ->
-    ?FORALL({Date, Time}, prop_ecron_spec:datetime(),
-        ?IMPLIES(calendar:valid_date(Date), ecron_spec:is_datetime({Date, Time}))).
 
 prop_spec_extend(doc) -> "ecron_spec:parse_spec(\"second minute hour day_of_month month day_of_week\") failed";
 prop_spec_extend(opts) -> [{numtests, 4000}].

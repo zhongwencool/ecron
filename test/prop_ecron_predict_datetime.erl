@@ -10,30 +10,28 @@
 %%%%%%%%%%%%%%%%%%
 
 prop_predict_cron_datetime(doc) -> "predict cron datetime failed";
-prop_predict_cron_datetime(opts) -> [{numtests, 5000}].
+prop_predict_cron_datetime(opts) -> [{numtests, 8000}].
 prop_predict_cron_datetime() ->
-    ?FORALL(Spec, {prop_ecron_spec:extend_spec(), shift(), shift()},
-        ?IMPLIES(prop_ecron:check_day_of_month(element(1, Spec)),
+    ?FORALL(Spec, {prop_ecron_spec:extend_spec(),
+        {range(0, 12), range(0, 59), range(0, 59)},
+        {range(13, 23), range(0, 59), range(0, 59)}},
+        ?IMPLIES(prop_ecron:check_predict_datetime(Spec),
             begin
-                {CrontabSpec, StartShift, EndShift} = Spec,
+                {CrontabSpec, Start, End} = Spec,
                 SpecStr = prop_ecron:spec_to_str(CrontabSpec),
                 {ok, cron, NewCrontabSpec} = ecron_spec:parse_spec(SpecStr),
                 Now = erlang:system_time(millisecond),
-                StartTime = shift_time(Now, StartShift),
-                EndTime = shift_time(Now, EndShift),
                 NewSpec = #{
                     type => cron,
                     crontab => NewCrontabSpec,
-                    start_time => StartTime,
-                    end_time => EndTime
+                    start_time => Start,
+                    end_time => End
                 },
-                Start = ecron:datetime_to_millisecond(local, StartTime),
-                End = ecron:datetime_to_millisecond(local, EndTime),
                 List = ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now),
                 NowDateTime = calendar:system_time_to_local_time(Now, millisecond),
-                ExpectList = predict_cron_datetime(StartTime, EndTime, NewCrontabSpec, {local, NowDateTime}, 500, []),
+                ExpectList = predict_cron_datetime(Start, End, NewCrontabSpec, {local, NowDateTime}, 500, []),
                 ?WHENFAIL(
-                    io:format("Predict ~p\n ~p\nFailed: ~p~n~p~n", [SpecStr, NewSpec, StartTime,
+                    io:format("Predict ~p\n ~p\nFailed: ~p~n~p~n", [SpecStr, NewSpec, Start,
                         {activate, NewSpec, Start, End, 500, local}]),
                     ExpectList =:= List andalso prop_ecron:check_cron_result(NewCrontabSpec, Start, End, List)
                 )
@@ -43,46 +41,39 @@ prop_predict_cron_datetime() ->
 prop_predict_every_datetime(doc) -> "predict every datetime failed";
 prop_predict_every_datetime(opts) -> [{numtests, 3000}].
 prop_predict_every_datetime() ->
-    ?FORALL(Spec, {range(1, ?MAX_TIMEOUT), shift(), shift()},
+    ?FORALL(Spec, {range(1, ?MAX_TIMEOUT),
+        {range(0, 12), range(0, 59), range(0, 59)},
+        {range(13, 23), range(0, 59), range(0, 59)}},
         begin
             Now = erlang:system_time(millisecond),
-            {Second, StartShift, EndShift} = Spec,
-            StartTime = shift_time(Now, StartShift),
-            EndTime = shift_time(Now, EndShift),
+            {Second, Start, End} = Spec,
             NewSpec = #{
                 type => every,
                 crontab => Second,
-                start_time => StartTime,
-                end_time => EndTime
+                start_time => Start,
+                end_time => End
             },
-            Start = shift_ms(Now, StartShift),
-            End = shift_ms(Now, EndShift),
             List = ecron:predict_datetime(activate, NewSpec, Start, End, 10, utc, Now),
             ?WHENFAIL(
                 io:format("Predict Failed: ~p ~p~n", [NewSpec, List]),
-                prop_ecron:check_every_result(Second,
-                    shift_second(Now div 1000, StartShift),
-                    shift_second(Now div 1000, EndShift), List)
+                prop_ecron:check_every_result(Second, Start, End, utc, List)
             )
         end).
 
 %%%%%%%%%%%%%%%
 %%% Helpers %%%
 %%%%%%%%%%%%%%%
-
 predict_cron_datetime(_Start, _End, _Job, _Now, 0, Acc) -> lists:reverse(Acc);
 predict_cron_datetime(Start, End, Job, {TimeZone, Now}, Num, Acc) ->
     Next = next_schedule_datetime(Job, Now),
     case in_range(Next, Start, End) of
-        already_ended -> lists:reverse(Acc);
-        deactivate ->
-            FSeconds = calendar:datetime_to_gregorian_seconds(Start) - 1,
-            NewStart = calendar:gregorian_seconds_to_datetime(FSeconds),
-            predict_cron_datetime(Start, End, Job, {TimeZone, NewStart}, Num, Acc);
-        running ->
+        false ->
+            predict_cron_datetime(Start, End, Job, {TimeZone, Next}, Num, Acc);
+        true ->
             predict_cron_datetime(Start, End, Job, {TimeZone, Next},
                 Num - 1, [to_rfc3339(TimeZone, Next) | Acc])
     end.
+
 next_schedule_datetime(DateSpec, DateTime) ->
     ForwardDateTime = forward_sec(DateTime),
     next_schedule_datetime(forward, DateSpec, ForwardDateTime).
@@ -146,46 +137,17 @@ forward_day(DateTime) ->
     {{Y, M, D}, _} = calendar:gregorian_seconds_to_datetime(FSeconds),
     {{Y, M, D}, {0, 0, 0}}.
 
-shift_time(_, unlimited) -> unlimited;
-shift_time(Current, Ms) -> calendar:system_time_to_local_time(Current + Ms * 1000, millisecond).
+in_range(_Current, unlimited, unlimited) -> ok;
+in_range({_, {H, M, S}}, unlimited, {EH, EM, ES}) ->
+    H*3600 + M*60 + S >= EH *3600 + EM*60 + ES;
 
-shift_ms(_, unlimited) -> unlimited;
-shift_ms(Current, Ms) -> Current + Ms * 1000.
-
-shift_second(_, unlimited) -> unlimited;
-shift_second(Current, Ms) -> Current + Ms.
-
--define(AlreadyEndedStatus, already_ended).
--define(WaitingStatus, waiting).
--define(RunningStatus, running).
--define(DeactivateStatus, deactivate).
--define(ActivateStatus, activate).
-
-in_range(_Current, unlimited, unlimited) -> ?RunningStatus;
-in_range(Current, unlimited, End) ->
-    case second_diff(End, Current) > 0 of
-        true -> ?AlreadyEndedStatus;
-        false -> ?RunningStatus
-    end;
-in_range(Current, Start, unlimited) ->
-    case second_diff(Start, Current) < 0 of
-        true -> ?DeactivateStatus;
-        false -> ?RunningStatus
-    end;
-in_range(Current, Start, End) ->
-    case second_diff(End, Current) > 0 of
-        true -> ?AlreadyEndedStatus;
-        false ->
-            case second_diff(Start, Current) < 0 of
-                true -> ?DeactivateStatus;
-                false -> ?RunningStatus
-            end
-    end.
-
-second_diff(CurrentDateTime, NextDateTime) ->
-    CurrentSeconds = calendar:datetime_to_gregorian_seconds(CurrentDateTime),
-    NextSeconds = calendar:datetime_to_gregorian_seconds(NextDateTime),
-    NextSeconds - CurrentSeconds.
+in_range({_, {H, M, S}}, {SH, SM, SS}, unlimited) ->
+    H*3600 + M*60 + S =< SH *3600 + SM*60 + SS;
+in_range({_, {H, M, S}}, {SH, SM, SS}, {EH, EM, ES}) ->
+    STime = SH*3600 + SM*60 + SS,
+    ETime = EH*3600 + EM*60 + ES,
+    Time = H*3600 + M*60 + S,
+    Time >= STime andalso Time =< ETime.
 
 valid_datetime('*', _Value) -> true;
 valid_datetime([], _Value) -> false;
@@ -209,9 +171,3 @@ to_rfc3339(TimeZone, Time) ->
 %%%%%%%%%%%%%%%%%%
 %%% Generators %%%
 %%%%%%%%%%%%%%%%%%
-shift() ->
-    frequency([
-        {9, range(-3600 * 12, 3600 * 12)},
-        {3, unlimited}
-    ]).
-
