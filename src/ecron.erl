@@ -41,7 +41,7 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
--type register() ::atom().
+-type register() :: atom().
 -type name() :: term().
 -type crontab_spec() :: crontab() | string() | binary() | 1..4294967.
 
@@ -87,8 +87,7 @@
 -type options() :: [option()].
 
 %% @equiv add(ecron_local, JobName, Spec, MFA)
--spec add(name(), crontab_spec(), mfargs()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+-spec add(name(), crontab_spec(), mfargs()) -> {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 add(JobName, Spec, MFA) ->
     add(?LocalJob, JobName, Spec, MFA).
 
@@ -99,8 +98,7 @@ add(Register, JobName, Spec, MFA) ->
     add(Register, JobName, Spec, MFA, unlimited, unlimited, []).
 
 %% @equiv add_with_count(ecron_local, make_ref(), Spec, MFA, RunCount)
--spec add_with_count(crontab_spec(), mfargs(), pos_integer()) ->
-    {ok, name()} | {error, parse_error(), term()}.
+-spec add_with_count(crontab_spec(), mfargs(), pos_integer()) -> {ok, name()} | {error, parse_error(), term()}.
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
     add_with_count(?LocalJob, make_ref(), Spec, MFA, RunCount).
 
@@ -198,8 +196,7 @@ send_interval(Spec, Pid, Message) ->
     send_interval(?LocalJob, make_ref(), Spec, Pid, Message).
 
 %% @equiv send_interval(ecron_local,name(), Spec, Pid, Message, unlimited, unlimited, [])
--spec send_interval(register(), name(), crontab_spec(), pid(), term()) ->
-    {ok, name()} | {error, parse_error(), term()}.
+-spec send_interval(register(), name(), crontab_spec(), pid(), term()) -> {ok, name()} | {error, parse_error(), term()}.
 send_interval(Register, Name, Spec, Pid, Message) ->
     send_interval(Register, Name, Spec, Pid, Message, unlimited, unlimited, []).
 
@@ -241,6 +238,7 @@ delete(Register, JobName) -> gen_server:call(Register, {delete, JobName}, infini
 %% @equiv deactivate(ecron_local, Name).
 -spec deactivate(name()) -> ok | {error, not_found}.
 deactivate(JobName) -> deactivate(?LocalJob, JobName).
+
 %% @doc
 %% Deactivate an exist job, if the job is nonexistent, return `{error, not_found}'.
 %% just freeze the job, use @see activate/2 to unfreeze job.
@@ -250,6 +248,7 @@ deactivate(Register, JobName) -> gen_server:call(Register, {deactivate, JobName}
 %% @equiv activate(ecron_local, Name).
 -spec activate(name()) -> ok | {error, not_found}.
 activate(JobName) -> activate(?LocalJob, JobName).
+
 %% @doc
 %% Activate an exist job, if the job is nonexistent, return `{error, not_found}'.
 %% if the job is already activate, nothing happened.
@@ -258,13 +257,18 @@ activate(JobName) -> activate(?LocalJob, JobName).
 activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, infinity).
 
 %% @equiv statistic(ecron_local,Name).
--spec statistic(register()) -> {ok, statistic()} | {error, not_found}.
+-spec statistic(register() | name()) -> {ok, statistic()} | {error, not_found}.
 statistic(Register) ->
-    case ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register) of
-        [] -> {error, not_found};
-        List -> {ok, List}
+    case erlang:whereis(Register) of
+        undefined ->
+            statistic(?LocalJob, Register);
+        _ ->
+            case ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register) of
+                [] -> {error, not_found};
+                List -> {ok, List}
+            end
     end.
-    
+
 %% @doc
 %% Statistic from an exist job.
 %% if the job is nonexistent, return `{error, not_found}'.
@@ -521,8 +525,9 @@ next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End) ->
     next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone).
 
 next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone) ->
-    NextDateTime = {_, {NH, NM, NS}}
-        = next_schedule_datetime(Spec, MinSpec, ForwardDateTime, Start, End),
+    NextDateTime =
+        {_, {NH, NM, NS}} =
+        next_schedule_datetime(Spec, MinSpec, ForwardDateTime, Start, End),
     Next = NH * 3600 + NM * 60 + NS,
     {SHour, SMin, SSec} = Start,
     {EHour, EMin, ESec} = End,

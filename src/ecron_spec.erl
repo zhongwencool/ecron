@@ -29,7 +29,8 @@ valid_time(cron, {SH, SM, SS}, {EH, EM, ES}, CronTab) ->
 valid_time(every, {SH, SM, SS}, {EH, EM, ES}, _CronTab) ->
     ((EH - SH) * 3600 + (EM - SM) * 60 + (ES - SS)) >= 0.
 
-parse_max(Max, '*') -> Max;
+parse_max(Max, '*') ->
+    Max;
 parse_max(_DefaultMax, List) ->
     case lists:last(List) of
         {_, Max} -> Max;
