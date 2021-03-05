@@ -258,8 +258,13 @@ activate(JobName) -> activate(?LocalJob, JobName).
 activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, infinity).
 
 %% @equiv statistic(ecron_local,Name).
--spec statistic(name()) -> {ok, statistic()} | {error, not_found}.
-statistic(JobName) -> statistic(?LocalJob, JobName).
+-spec statistic(register()) -> {ok, statistic()} | {error, not_found}.
+statistic(Register) ->
+    case ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register) of
+        [] -> {error, not_found};
+        List -> {ok, List}
+    end.
+    
 %% @doc
 %% Statistic from an exist job.
 %% if the job is nonexistent, return `{error, not_found}'.

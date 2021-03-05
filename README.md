@@ -84,6 +84,45 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
   You can also reload task manually by `ecron:reload().` when the system time is manually modified.
 * Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check this for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
 
+## Supervisor Tree Usage
+Ecron starts with a standalone process(`ecron_local`) to manage all jobs by default,
+but you can also set up your own job management process for each application,
+which has the advantage that you can precisely control its start time and stop timing.
+This has the advantage that you can precisely control when it starts and when it stops.
+The Jobs between various applications do not affect each other.
+
+Ecron must be included in your application's supervision tree.
+All of your configuration is passed into the supervisor:
+```erlang
+%%config/sys.config
+[{your_app, [{crontab_jobs, [
+   {crontab_job, "*/15 * * * *", {stateless_cron, inspect, ["Runs on 0, 15, 30, 45 minutes"]}}
+  ]}
+].
+
+%% src/your_app_sup.erl
+-module(your_app_top_sup).
+-behaviour(supervisor).
+-export([init/1]).
+
+init(_Args) ->
+    Jobs = application:get_env(your_app, crontab_jobs, []),
+    SupFlags = #{
+        strategy => one_for_one,
+        intensity => 100,
+        period => 30
+    },
+    Name = 'uniqueName',
+    CronSpec = #{
+        id => Name,
+        start => {ecron, start_link, [{local, Name}, Jobs]},
+        restart => permanent,
+        shutdown => 1000,
+        type => worker
+    },
+    {ok, {SupFlags, [CronSpec]}}.
+
+```
 ## Advanced Usage 
 
 ```erlang
