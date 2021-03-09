@@ -43,7 +43,7 @@ config :ecron, :local_jobs,
            :limit_datetime_job,
            "@hourly",
            {StatelessCron, :inspect, ["Runs every(0-23) o'clock"]},
-           {{2019, 9, 26}, {0, 0, 0}},
+           {11, 0, 0},
            :unlimited
          },
          # Job with max run count, default is `unlimited`

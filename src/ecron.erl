@@ -132,7 +132,7 @@ add(JobName, Spec, MFA, Start, End, Opts) ->
 %% <li>`JobName': The unique name of job, return `{error, already_exist}' if JobName is already exist.</li>
 %% <li>`Spec': A <a href="https://github.com/zhongwencool/ecron/blob/master/README.md#cron-expression-format"><tt>cron expression</tt></a> represents a set of times.</li>
 %% <li>`MFA': Spawn a process to run MFA when crontab is triggered.</li>
-%% <li>`Start': The job's next trigger time is Calculated from StartDatetime. Keeping `unlimited' if start from now on.</li>
+%% <li>`Start': The job's next trigger time is Calculated from StartTime. Keeping `unlimited' if start from now on.</li>
 %% <li>`End': The job will be remove at end time. Keeping `unlimited' if never end.</li>
 %% <li>`Opts': The optional list of options. `{singleton, true}': Default job is singleton, Each task cannot be executed concurrently.
 %% `{max_count, pos_integer()}': This task can be run up to `MaxCount' times, default is `unlimited'.
@@ -259,10 +259,10 @@ activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, in
 %% @equiv statistic(ecron_local,Name).
 -spec statistic(register() | name()) -> {ok, statistic()} | {error, not_found}.
 statistic(Register) ->
-    case erlang:whereis(Register) of
-        undefined ->
+    case is_atom(Register) andalso undefined =/= erlang:whereis(Register) of
+        true ->
             statistic(?LocalJob, Register);
-        _ ->
+        false ->
             case ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register) of
                 [] -> {error, not_found};
                 List -> {ok, List}
