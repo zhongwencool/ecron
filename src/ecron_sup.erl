@@ -1,32 +1,37 @@
 %%% @private
 -module(ecron_sup).
+
 -behaviour(supervisor).
+
 -include("ecron.hrl").
 
 -export([start_global/1, stop_global/1]).
 -export([start_link/0, init/1]).
 
--define(LOCAL_WORKER, ecron_tick).
+-define(LOCAL_WORKER, ecron).
 -define(GLOBAL_WORKER, ecron_global).
 
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 start_global(Measurements) ->
-    case supervisor:start_child(?MODULE,
-        #{
-            id => ?GLOBAL_WORKER,
-            start => {ecron_tick, start_link, [{global, ?Ecron}]},
-            restart => temporary,
-            shutdown => 1000,
-            type => worker,
-            modules => [?GLOBAL_WORKER]
-        }) of
+    GlobalJobs = application:get_env(?Ecron, global_jobs, []),
+    GlobalSpec = #{
+        id => ?GLOBAL_WORKER,
+        start => {ecron, start_link, [{global, ?GlobalJob}, GlobalJobs]},
+        restart => temporary,
+        shutdown => 1000,
+        type => worker,
+        modules => [?GLOBAL_WORKER]
+    },
+    case supervisor:start_child(?MODULE, GlobalSpec) of
         {ok, Pid} ->
             telemetry:execute(?GlobalUp, Measurements, #{self => node()}),
             {ok, Pid};
-        {error, {already_started, Pid}} -> {ok, Pid};
-        {error, {{already_started, Pid}, _}} -> {ok, Pid}
+        {error, {already_started, Pid}} ->
+            {ok, Pid};
+        {error, {{already_started, Pid}, _}} ->
+            {ok, Pid}
     end.
 
 stop_global(Measurements) ->
@@ -36,34 +41,35 @@ stop_global(Measurements) ->
     end.
 
 init([]) ->
-    ?Job = ets:new(?Job, [named_table, set, public, {keypos, 2}]),
+    LocalJobs = application:get_env(?Ecron, local_jobs, []),
+    GlobalJobs = application:get_env(?Ecron, global_jobs, []),
     SupFlags = #{
         strategy => one_for_one,
         intensity => 100,
         period => 30
     },
-    Local = #{
+    LocalSpec = #{
         id => ?LOCAL_WORKER,
-        start => {?LOCAL_WORKER, start_link, [{local, ?Ecron}]},
+        start => {?LOCAL_WORKER, start_link, [{local, ?LocalJob}, LocalJobs]},
         restart => permanent,
         shutdown => 1000,
         type => worker,
         modules => [?LOCAL_WORKER]
     },
-    Monitor = monitor_worker(),
-    {ok, {SupFlags, [Local | Monitor]}}.
-
-monitor_worker() ->
-    Jobs = application:get_env(?Ecron, global_jobs, []),
-    monitor_worker(Jobs).
-
-monitor_worker([]) -> [];
-monitor_worker(Jobs) ->
-    [#{
-        id => ?MONITOR_WORKER,
-        start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, Jobs]},
-        restart => permanent,
-        shutdown => 1000,
-        type => worker,
-        modules => [?MONITOR_WORKER]
-    }].
+    GlobalSpec =
+        case application:get_env(?Ecron, global_jobs, []) of
+            [] ->
+                [];
+            GlobalJobs ->
+                [
+                    #{
+                        id => ?MONITOR_WORKER,
+                        start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
+                        restart => permanent,
+                        shutdown => 1000,
+                        type => worker,
+                        modules => [?MONITOR_WORKER]
+                    }
+                ]
+        end,
+    {ok, {SupFlags, [LocalSpec | GlobalSpec]}}.

@@ -4,7 +4,6 @@
 
 -export([prop_zip/0, prop_zip/1]).
 -export([prop_max_day_of_months/0, prop_max_day_of_months/1]).
--export([prop_valid_datetime/0, prop_valid_datetime/1]).
 -export([prop_spec_extend/0, prop_spec_extend/1]).
 -export([prop_spec_standard/0, prop_spec_standard/1]).
 -export([prop_spec_predefined/0, prop_spec_predefined/1]).
@@ -21,26 +20,20 @@ prop_zip(doc) -> "ecron:zip/1 failed";
 prop_zip(opts) -> [{numtests, 4000}].
 prop_zip() ->
     ?FORALL(List, usort_list(non_neg_integer()),
-        prop_ecron:unzip(ecron:zip(List)) =:= List).
+        prop_ecron:unzip(ecron_spec:zip(List)) =:= List).
 
 prop_max_day_of_months(doc) -> "ecron:get_max_day_of_months/1 failed";
 prop_max_day_of_months(opts) -> [{numtests, 1000}].
 prop_max_day_of_months() ->
     ?FORALL(List, usort_list(prop_ecron_spec:month()),
         begin
-            ZipList = ecron:zip(List),
-            Actual = ecron:get_max_day_of_months(ZipList),
+            ZipList = ecron_spec:zip(List),
+            Actual = ecron_spec:get_max_day_of_months(ZipList),
             Expect = lists:max(lists:map(fun prop_ecron:max_day_of_month/1, List)),
             Expect =:= Actual
         end).
 
-prop_valid_datetime(doc) -> "ecron:valid_datetime/2 failed";
-prop_valid_datetime(opts) -> [{numtests, 4000}].
-prop_valid_datetime() ->
-    ?FORALL({Date, Time}, prop_ecron_spec:datetime(),
-        ?IMPLIES(calendar:valid_date(Date), ecron:valid_datetime({Date, Time}))).
-
-prop_spec_extend(doc) -> "ecron:parse_spec(\"second minute hour day_of_month month day_of_week\") failed";
+prop_spec_extend(doc) -> "ecron_spec:parse_spec(\"second minute hour day_of_month month day_of_week\") failed";
 prop_spec_extend(opts) -> [{numtests, 4000}].
 prop_spec_extend() ->
     ?FORALL(Spec, prop_ecron_spec:extend_spec(),
@@ -56,14 +49,14 @@ prop_spec_extend() ->
             end)
     ).
 
-prop_spec_standard(doc) -> "ecron:parse_spec(\"minute hour day_of_month month day_of_week\") failed";
+prop_spec_standard(doc) -> "ecron_spec:parse_spec(\"minute hour day_of_month month day_of_week\") failed";
 prop_spec_standard(opts) -> [{numtests, 4000}].
 prop_spec_standard() ->
     ?FORALL(Spec, prop_ecron_spec:standard_spec(),
         ?IMPLIES(prop_ecron:check_day_of_month(Spec),
             begin
                 SpecStr = prop_ecron:spec_to_str(Spec),
-                Actual = ecron:parse_spec(SpecStr),
+                Actual = ecron_spec:parse_spec(SpecStr),
                 Expect = spec_to_extend(Spec),
                 ?WHENFAIL(
                     io:format("Parse ~s Failed: ~p\n  ~p\n", [SpecStr, Expect, Actual]),
@@ -74,12 +67,12 @@ prop_spec_standard() ->
 
 -define(PredefinedSpec, ["@yearly", "@annually", "@monthly", "@weekly", "@midnight", "@daily", "@hourly", "@minutely"]).
 
-prop_spec_predefined(doc) -> "ecron:parse_spec/1 predefined spec failed";
+prop_spec_predefined(doc) -> "ecron_spec:parse_spec/1 predefined spec failed";
 prop_spec_predefined(opts) -> [{numtests, 2000}].
 prop_spec_predefined() ->
     ?FORALL(Spec, elements(?PredefinedSpec),
         begin
-            Actual = ecron:parse_spec(Spec),
+            Actual = ecron_spec:parse_spec(Spec),
             Expect = spec_to_extend(Spec),
             ?WHENFAIL(
                 io:format("Parse ~s SpecFailed: ~p\n  ~p\n", [Spec, Expect, Actual]),
@@ -87,7 +80,7 @@ prop_spec_predefined() ->
             )
         end).
 
-prop_spec_every(doc) -> "ecron:parse_spec/1 @every 1d2h3m4s spec failed";
+prop_spec_every(doc) -> "ecron_spec:parse_spec/1 @every 1d2h3m4s spec failed";
 prop_spec_every(opts) -> [{numtests, 4000}].
 prop_spec_every() ->
     ?FORALL(Spec, every_spec(),
@@ -95,7 +88,7 @@ prop_spec_every() ->
             begin
                 {Format, Args} = every_spec_to_str(Spec),
                 SpecStr = lists:flatten(io_lib:format("@every " ++ Format, Args)),
-                Actual = ecron:parse_spec(SpecStr),
+                Actual = ecron_spec:parse_spec(SpecStr),
                 Expect = {ok, every, every_spec_to_second(Spec)},
                 ?WHENFAIL(
                     io:format("Parse ~s Failed: ~p\n~p\n", [SpecStr, Expect, Actual]),
@@ -104,7 +97,7 @@ prop_spec_every() ->
             end)
     ).
 
-prop_spec_every_error(doc) -> "ecron:parse_spec/1 @every 1d2h3m4s spec failed";
+prop_spec_every_error(doc) -> "ecron_spec:parse_spec/1 @every 1d2h3m4s spec failed";
 prop_spec_every_error(opts) -> [{numtests, 4000}].
 prop_spec_every_error() ->
     ?FORALL(Spec, every_error_spec(),
@@ -118,7 +111,7 @@ prop_spec_every_error() ->
             )
         end).
 
-prop_maybe_error_spec(doc) -> "ecron:parse_spec/1 error spec failed";
+prop_maybe_error_spec(doc) -> "ecron_spec:parse_spec/1 error spec failed";
 prop_maybe_error_spec(opts) -> [{numtests, 4000}].
 prop_maybe_error_spec() ->
     ?FORALL(Spec, prop_ecron_spec:maybe_error_spec(),
@@ -161,7 +154,7 @@ prop_map_error_spec() ->
                     second -> maps:put(Extra, [0], Expect);
                     _ -> maps:put(Extra, '*', Expect)
                 end,
-            case ecron:parse_spec(SpecMap) of
+            case ecron_spec:parse_spec(SpecMap) of
                 {ok, cron, Ecron} ->
                     ?WHENFAIL(
                         io:format("Parse ~p\n Failed: ~p\n  ~p\n", [SpecMap, NewExpect, Ecron]),
@@ -175,7 +168,7 @@ prop_map_error_spec() ->
             end
         end).
 
-prop_error_format(doc) -> "ecron:parse_spec/1 spec wrong format failed";
+prop_error_format(doc) -> "ecron_spec:parse_spec/1 spec wrong format failed";
 prop_error_format(opts) -> [{numtests, 2000}].
 prop_error_format() ->
     ?FORALL({Spec, Rand, Extra},

@@ -3,7 +3,7 @@
 -include_lib("proper/include/proper.hrl").
 
 -export([datetime/0, month/0]).
--export([standard_spec/0, extend_spec/0, integer_spec/2]).
+-export([standard_spec/0, extend_spec/0, integer_spec/2, extend_spec/2]).
 -export([maybe_error_spec/0]).
 -export([crontab_spec/0]).
 
@@ -36,6 +36,16 @@ extend_spec() ->
         oneof([integer_spec(0, 6), alphabet_spec(day_of_week, 0, 6)])
     ].
 
+extend_spec(Min, Max) ->
+    [
+        integer_spec(0, 59),
+        integer_spec(0, 59),
+        integer_spec(Min, Max),
+        integer_spec(1, 31),
+        oneof([integer_spec(1, 12), alphabet_spec(month, 1, 12)]),
+        oneof([integer_spec(0, 6), alphabet_spec(day_of_week, 0, 6)])
+    ].
+
 maybe_error_spec() ->
     [
         error_integer_spec(0, 100), %% second
@@ -49,15 +59,15 @@ maybe_error_spec() ->
 integer_spec(Min, Max) ->
     frequency([
         {1, "*"}, %% "*"
-        {1, {'*/Step', general, Min, Max, range(1, 100)}}, %% "*/Step"
+        {1, {'*/Step', general, Min, Max, range(1, 31)}}, %% "*/Step"
         {8, ?SIZED(S, integer_spec(S, Min, Max))}]).
 
 integer_spec(S, Min, Max) ->
     oneof([
         {'Integer', general, range(Min, Max)}, %% 1
         'Min-Max'(general, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 100)), %% 1-5/2
-        {'Min/Step', general, range(Min, Max), Max, range(1, 100)}, %% 10/2
+        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 31)), %% 1-5/2
+        {'Min/Step', general, range(Min, Max), Max, range(1, 31)}, %% 10/2
         ?LAZY({list, general, [integer_spec(S - 1, Min, Max), integer_spec(S - 2, Min, Max)]}) %% 1,2-6/2...
     ]).
 
@@ -68,7 +78,7 @@ error_integer_spec(S, Min, Max) ->
     oneof([
         {'Integer', general, range(Min, Max)}, %% 1
         'Min-Max'(general, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 100)), %% 1-5/2
+        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 31)), %% 1-5/2
         ?LAZY({list, general, [error_integer_spec(S - 1, Min, Max), error_integer_spec(S - 2, Min, Max)]}) %% 1,2-6/2...
     ]).
 
@@ -79,8 +89,8 @@ alphabet_spec(S, Type, Min, Max) ->
     oneof([
         {'Integer', Type, range(Min, Max)}, %% 1
         'Min-Max'(Type, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(Type, range(Min, Max), Max, range(1, 100)), %% 1-5/2
-        {'Min/Step', Type, range(Min, Max), Max, range(1, 100)}, %% 10/2
+        'Min-Max/Step'(Type, range(Min, Max), Max, range(1, 31)), %% 1-5/2
+        {'Min/Step', Type, range(Min, Max), Max, range(1, 31)}, %% 10/2
         ?LAZY({list, Type, [alphabet_spec(S - 1, Type, Min, Max), alphabet_spec(S - 2, Type, Min, Max)]}) %% 1,2-6/2...
     ]).
 

@@ -39,7 +39,7 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 0.5"}]
+    [{:ecron, "~> 0.6"}]
   end
 ```
 
@@ -63,8 +63,8 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
          {extend_crontab_job, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
          {alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
          {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
-         %% Runs 0-23 o'clock since {{2019,9,26},{0,0,0}}.
-         {limit_datetime_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}, {{2019,9,26},{0,0,0}}, unlimited},
+         %% Runs every 15 minutes between {8,20,0} and {23, 59, 59}.
+         %% {limit_time_job, "*/15 * * * *", {io, format, ["Runs 0, 15, 30, 45 minutes after 8:20am~n"]}, {8,20,0}, unlimited}
          %% parallel job         
          {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
      ]},
@@ -84,6 +84,45 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
   You can also reload task manually by `ecron:reload().` when the system time is manually modified.
 * Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check this for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
 
+## Supervisor Tree Usage
+Ecron starts with a standalone process(`ecron_local`) to manage all jobs by default,
+but you can also set up your own job management process for each application,
+which has the advantage that you can precisely control its start time and stop timing.
+This has the advantage that you can precisely control when it starts and when it stops.
+The Jobs between various applications do not affect each other.
+
+Ecron must be included in your application's supervision tree.
+All of your configuration is passed into the supervisor:
+```erlang
+%%config/sys.config
+[{your_app, [{crontab_jobs, [
+   {crontab_job, "*/15 * * * *", {stateless_cron, inspect, ["Runs on 0, 15, 30, 45 minutes"]}}
+  ]}
+].
+
+%% src/your_app_sup.erl
+-module(your_app_top_sup).
+-behaviour(supervisor).
+-export([init/1]).
+
+init(_Args) ->
+    Jobs = application:get_env(your_app, crontab_jobs, []),
+    SupFlags = #{
+        strategy => one_for_one,
+        intensity => 100,
+        period => 30
+    },
+    Name = 'uniqueName',
+    CronSpec = #{
+        id => Name,
+        start => {ecron, start_link, [Name, Jobs]},
+        restart => permanent,
+        shutdown => 1000,
+        type => worker
+    },
+    {ok, {SupFlags, [CronSpec]}}.
+
+```
 ## Advanced Usage 
 
 ```erlang
@@ -275,7 +314,7 @@ For example, "@every 1h30m10s" would indicate a schedule that activates after 1 
 
 >Note: The interval doesn't take the job runtime into account. 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
->it also has 5 minutes of idle time between each run.
+>it only has 2 minutes of idle time between each run.
   
 ## Test
 
