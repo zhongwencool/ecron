@@ -260,9 +260,9 @@ activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, in
 -spec statistic(register() | name()) -> {ok, statistic()} | {error, not_found}.
 statistic(Register) ->
     case is_atom(Register) andalso undefined =/= erlang:whereis(Register) of
-        true ->
-            statistic(?LocalJob, Register);
         false ->
+            statistic(?LocalJob, Register);
+        true ->
             case ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register) of
                 [] -> {error, not_found};
                 List -> {ok, List}
