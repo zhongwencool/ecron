@@ -37,6 +37,9 @@ basic(_Config) ->
     MFA = {io,format,["Mail checking~n"]},
     {ok, JobName} = ecron:add(?NAME, JobName, "0 0 8 * * 1-5", MFA, unlimited, unlimited, []),
     {ok, Result} = ecron:statistic(?NAME, JobName),
+    [Result1] = ecron:statistic(?NAME),
+    [] = ecron:statistic(ecron_not_found),
+    ?assertEqual(Result1, Result, "ecron:statistic/2"),
     #{crontab :=
     #{day_of_month := '*',
         day_of_week := [{1,5}],

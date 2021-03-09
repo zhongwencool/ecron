@@ -256,17 +256,18 @@ activate(JobName) -> activate(?LocalJob, JobName).
 -spec activate(register(), name()) -> ok | {error, not_found}.
 activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, infinity).
 
-%% @equiv statistic(ecron_local,Name).
--spec statistic(register() | name()) -> {ok, statistic()} | {error, not_found}.
+-spec statistic(register() | name()) -> [statistic()].
 statistic(Register) ->
     case is_atom(Register) andalso undefined =/= erlang:whereis(Register) of
         false ->
-            statistic(?LocalJob, Register);
+            case ets:lookup(?LocalJob, Register) of
+                [Job] ->
+                    job_to_statistic(Job);
+                [] ->
+                    []
+            end;
         true ->
-            case ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register) of
-                [] -> {error, not_found};
-                List -> {ok, List}
-            end
+            ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register)
     end.
 
 %% @doc

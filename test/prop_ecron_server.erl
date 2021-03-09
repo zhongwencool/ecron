@@ -124,7 +124,7 @@ postcondition(_State, {call, _Mod, activate_unknown, [_Name | _]}, Res) ->
 postcondition(_State, {call, _Mod, activate_existing, [_Name | _]}, Res) ->
     Res =:= ok;
 postcondition(_State, {call, _Mod, statistic_unknown, [_Name | _]}, Res) ->
-    Res =:= {error, not_found};
+    Res =:= [];
 postcondition(State, {call, _Mod, statistic_existing, [Name | _]}, Res) ->
     valid_statistic(State, Name, Res);
 postcondition(_State, {call, _Mod, reload, []}, Res) ->
@@ -246,7 +246,7 @@ statistic_existing(Name) -> ecron:statistic(Name).
 statistic_all() -> ecron:statistic().
 reload() -> ecron:reload().
 
-valid_statistic(State, Name, {ok, Res}) ->
+valid_statistic(State, Name, [Res]) ->
     case maps:find(Name, State) of
         error -> false;
         {ok, #{cron := #{type := Type, crontab := CrontabSpec, mfa := MFAExpect}}} ->
