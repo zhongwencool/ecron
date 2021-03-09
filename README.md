@@ -115,7 +115,7 @@ init(_Args) ->
     Name = 'uniqueName',
     CronSpec = #{
         id => Name,
-        start => {ecron, start_link, [{local, Name}, Jobs]},
+        start => {ecron, start_link, [Name, Jobs]},
         restart => permanent,
         shutdown => 1000,
         type => worker

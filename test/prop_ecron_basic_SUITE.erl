@@ -29,7 +29,7 @@ end_per_suite(_Config) ->
 
 init_per_testcase(_TestCase, Config) ->
     application:ensure_all_started(ecron),
-    {ok, _Pid} = ecron:start_link({local, ?NAME}, []),
+    {ok, _Pid} = ecron:start_link(?NAME, []),
     Config.
 
 basic(_Config) ->

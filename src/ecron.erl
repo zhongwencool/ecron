@@ -260,12 +260,7 @@ activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, in
 statistic(Register) ->
     case is_atom(Register) andalso undefined =/= erlang:whereis(Register) of
         false ->
-            case ets:lookup(?LocalJob, Register) of
-                [Job] ->
-                    job_to_statistic(Job);
-                [] ->
-                    []
-            end;
+            [job_to_statistic(Job) || Job <- ets:lookup(?LocalJob, Register)];
         true ->
             ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register)
     end.
@@ -335,6 +330,7 @@ predict_datetime(Job, Num) ->
 %%%===================================================================
 %%% CallBack
 %%%===================================================================
+
 start_link({_, JobTab} = Name, JobSpec) ->
     case ecron_spec:parse_crontab(JobSpec, []) of
         {ok, Jobs} ->
@@ -342,7 +338,9 @@ start_link({_, JobTab} = Name, JobSpec) ->
             gen_server:start_link(Name, ?MODULE, [JobTab, Jobs], []);
         {error, Reason} ->
             {error, Reason}
-    end.
+    end;
+start_link(JobTab, JobSpec) when is_atom(JobTab) ->
+    start_link({local, JobTab}, JobSpec).
 
 init([JobTab, Jobs]) ->
     erlang:process_flag(trap_exit, true),
