@@ -1,3 +1,7 @@
+### 0.6.1
+- fix some spec warning.
+- upgrade telemetry to 1.1.0
+
 ### 0.5.2
 - redefine `[ecron global up/down]` telemetry event.
 
