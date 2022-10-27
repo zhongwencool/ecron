@@ -331,9 +331,9 @@ take(Key, Spec) ->
 parse_crontab([], Acc) ->
     {ok, Acc};
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs], Acc) ->
-    parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, unlimited, unlimited, []} | Jobs], Acc);
+    parse_crontab([{Name, Spec, MFA, unlimited, unlimited, []} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs], Acc) ->
-    parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, []} | Jobs], Acc);
+    parse_crontab([{Name, Spec, MFA, Start, End, []} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs], Acc) ->
     case parse_job(Name, Spec, MFA, Start, End, Opts) of
         {ok, Job} ->
