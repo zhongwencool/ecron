@@ -1,9 +1,11 @@
 <!-- markdownlint-disable MD013 -->
-# ecron [![GitHub Actions][action-img]][action]
+# ecron [![GitHub Actions][action-img]][action] [![coverage-img]][coverage] [![hex-img]][hex]
 [action]: https://github.com/zhongwencool/ecron
 [action-img]: https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg
-[![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master)](https://coveralls.io/github/zhongwencool/ecron?branch=master)
-[![Hex.pm](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron)
+[coverage]: https://coveralls.io/github/zhongwencool/ecron
+[coverage-img]: https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master
+[hex]: https://hex.pm/packages/ecron
+[hex-img]: https://img.shields.io/hexpm/v/ecron.svg?style=flat
 
 A lightweight/efficient cron-like job scheduling library for Erlang.
 
