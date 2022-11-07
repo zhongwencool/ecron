@@ -909,9 +909,10 @@ day_of_week(Y, M, D) ->
 %% For PropEr Test
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
 -compile(nowarn_export_all).
 -compile(export_all).
 
 maybe_spawn_woker_test() ->
-   ?assertEqual({0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)).
+    ?assertEqual({0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)).
 -endif.

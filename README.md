@@ -1,18 +1,19 @@
 ## ecron
-[![Build Status](https://travis-ci.org/zhongwencool/ecron.png?branch=master)](https://travis-ci.org/zhongwencool/ecron)
+[action]: https://github.com/zhongwencool/ecron
+[action-img]: https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg
 [![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master)](https://coveralls.io/github/zhongwencool/ecron?branch=master)
 [![Hex.pm](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron)
 
 A lightweight/efficient cron-like job scheduling library for Erlang.
 
-All Ecron's jobs is assigned to one single gen_server process, just run as same as the [stdlib's timer](http://erlang.org/doc/man/timer.html).
+All ecron's jobs is assigned to one single gen_server process, just run as same as the [stdlib's timer](http://erlang.org/doc/man/timer.html).
 
-It organize the jobs to be run in a ordered_set ets with the next time to run as key. 
+It organizes the jobs to be run in an ordered_set ets with the next time to run as key. 
 This way, you only need one process that calculates the time to wait until the next task should be executed, 
 then spawn the process to execute that task. 
 more detail see [Implementation](#Implementation).
  
-Ecron does not poll the system on a second-by-second basis like cron does.
+`ecron` does not poll the system on a second-by-second basis like cron does.
 The advantage of not doing this is to avoid lots of messages flying around. 
 
 All jobs are managed in one process, rather than running one job per process, 
@@ -85,13 +86,13 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
 * Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check this for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
 
 ## Supervisor Tree Usage
-Ecron starts with a standalone process(`ecron_local`) to manage all jobs by default,
+`ecron` starts with a standalone process(`ecron_local`) to manage all jobs by default,
 but you can also set up your own job management process for each application,
 which has the advantage that you can precisely control its start time and stop timing.
 This has the advantage that you can precisely control when it starts and when it stops.
 The Jobs between various applications do not affect each other.
 
-Ecron must be included in your application's supervision tree.
+`ecron` must be included in your application's supervision tree.
 All of your configuration is passed into the supervisor:
 ```erlang
 %%config/sys.config
@@ -259,7 +260,7 @@ Day of month | Yes        | 1-31            | * / , -
 Month        | Yes        | 1-12 or JAN-DEC | * / , -
 Day of week  | Yes        | 0-6 or SUN-SAT  | * / , -
 
-Note: Month and Day-of-week field values are case insensitive. "SUN", "Sun", and "sun" are equally accepted.
+Note: Month and Day-of-week field values are case-insensitive. "SUN", "Sun", and "sun" are equally accepted.
 
 When specifying your cron values you'll need to make sure that your values fall within the ranges. 
 For instance, some cron's use a 0-7 range for the day of week where both 0 and 7 represent Sunday. We do not.
