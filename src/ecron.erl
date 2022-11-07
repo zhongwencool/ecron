@@ -444,10 +444,8 @@ activate_job(Name, JobTab, TimerTab, TimeZone) ->
             {error, not_found};
         [#job{job = Job, opts = Opts}] ->
             delete_job(JobTab, TimerTab, Name),
-            case add_job(JobTab, TimerTab, Job, TimeZone, Opts, false) of
-                {ok, Name} -> ok;
-                Err -> Err
-            end
+            {ok, Name} = add_job(JobTab, TimerTab, Job, TimeZone, Opts, false),
+            ok
     end.
 
 deactivate_job(Name, JobTab, TimerTab) ->
@@ -910,5 +908,10 @@ day_of_week(Y, M, D) ->
 
 %% For PropEr Test
 -ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-compile(nowarn_export_all).
 -compile(export_all).
+
+maybe_spawn_woker_test() ->
+   ?assertEqual({0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)).
 -endif.
