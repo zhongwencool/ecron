@@ -1,4 +1,5 @@
-## ecron
+<!-- markdownlint-disable MD013 -->
+# ecron [![GitHub Actions][action-img]][action]
 [action]: https://github.com/zhongwencool/ecron
 [action-img]: https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg
 [![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master)](https://coveralls.io/github/zhongwencool/ecron?branch=master)
