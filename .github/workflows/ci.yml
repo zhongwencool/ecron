@@ -1,0 +1,36 @@
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Erlang/OTP ${{matrix.otp}} / rebar3 ${{matrix.rebar3}}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      matrix:
+        otp: ['23.3.4', '24.0.3']
+        rebar3: ['3.20.0', '3.19.0']
+    steps:
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          rebar3-version: ${{matrix.rebar3}}
+      - run: rebar3 as test get-deps
+      - run: epmd -daemon
+      - run: rebar3 as test proper -c
+      - run: rebar3 as test eunit -c
+      - run: rebar3 as test ct -c
+      - run: rebar3 as test cover
+      - name: Send to Coveralls
+        if: matrix.otp == '24.0.3' && matrix.rebar3 == '3.20.0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COVERALLS=true rebar3 as test coveralls send
+          curl -v -k https://coveralls.io/webhook \
+               --header "Content-Type: application/json" \
+               --data '{"repo_name":"$GITHUB_REPOSITORY",
+                        "repo_token":"$GITHUB_TOKEN",
+                        "payload":{"build_num":$GITHUB_RUN_ID,
+                                   "status":"done"}}'      
