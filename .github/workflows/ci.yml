@@ -11,7 +11,7 @@ jobs:
         otp: ['23.3.4', '24.0.3']
         rebar3: ['3.20.0', '3.19.0']
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
@@ -22,15 +22,15 @@ jobs:
       - run: rebar3 as test eunit -c
       - run: rebar3 as test ct -c
       - run: rebar3 as test cover
-      - name: Send to Coveralls
+      - name: Generate code coverage report
         if: matrix.otp == '24.0.3' && matrix.rebar3 == '3.20.0'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          COVERALLS=true rebar3 as test coveralls send
-          curl -v -k https://coveralls.io/webhook \
-               --header "Content-Type: application/json" \
-               --data '{"repo_name":"$GITHUB_REPOSITORY",
-                        "repo_token":"$GITHUB_TOKEN",
-                        "payload":{"build_num":$GITHUB_RUN_ID,
-                                   "status":"done"}}'      
+        run: rebar3 as test covertool generate
+      - name: Upload code coverage to Codecov
+        if: matrix.otp == '24.0.3' && matrix.rebar3 == '3.20.0'
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: _build/test/covertool/ecron.covertool.xml
+          flags: erlang-${{ matrix.otp_version }},os-${{ matrix.os }}
+          name: Erlang/OTP ${{ matrix.otp_version }} on ${{ matrix.os }}
+          verbose: true # optional (default = false)
