@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD013 -->
-# ecron [![GitHub Actions][action-img]][action] [![coverage-img]][coverage] [![hex-img]][hex]
+# ecron [![GitHub Actions][action-img]][action] [![codeCov-img]][codeCov] [![hex-img]][hex]
 [action]: https://github.com/zhongwencool/ecron
 [action-img]: https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg
 [codeCov]: https://codecov.io/gh/zhongwencool/ecron
@@ -26,7 +26,7 @@ After all, most of the time the process is waiting(do nothing but eat memory).
 It offers:
 
 * Both cron-like scheduling and interval-based scheduling.
-* Well tested by [PropTest](https://github.com/proper-testing/proper) ![Coverage Status](https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master).
+* Well tested by [PropTest](https://github.com/proper-testing/proper) [![codecov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron).
 * Using gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
 
 You can find a collection of general practices in [Full Erlang Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Full Elixir Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
