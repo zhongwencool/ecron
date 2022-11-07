@@ -2,8 +2,8 @@
 # ecron [![GitHub Actions][action-img]][action] [![coverage-img]][coverage] [![hex-img]][hex]
 [action]: https://github.com/zhongwencool/ecron
 [action-img]: https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg
-[coverage]: https://coveralls.io/github/zhongwencool/ecron
-[coverage-img]: https://coveralls.io/repos/github/zhongwencool/ecron/badge.svg?branch=master
+[codeCov]: https://codecov.io/gh/zhongwencool/ecron
+[codeCov-img]: https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5
 [hex]: https://hex.pm/packages/ecron
 [hex-img]: https://img.shields.io/hexpm/v/ecron.svg?style=flat
 
