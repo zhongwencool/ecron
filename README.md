@@ -7,27 +7,19 @@
 [hex]: https://hex.pm/packages/ecron
 [hex-img]: https://img.shields.io/hexpm/v/ecron.svg?style=flat
 
-A lightweight/efficient cron-like job scheduling library for Erlang.
+A lightweight and efficient cron-like job scheduling library for Erlang.
 
-All ecron's jobs is assigned to one single gen_server process, just run as same as the [stdlib's timer](http://erlang.org/doc/man/timer.html).
+## Overview
+Ecron is designed to manage scheduled jobs within a single gen_server process, similar to the standard library's [stdlib's timer](http://erlang.org/doc/man/timer.html). It uses an ordered_set ETS table to organize jobs by the next run time, ensuring efficient execution. Unlike traditional cron, Ecoron does not poll the system every second, which reduces message overhead and process usage.
 
-It organizes the jobs to be run in an ordered_set ets with the next time to run as key. 
-This way, you only need one process that calculates the time to wait until the next task should be executed, 
-then spawn the process to execute that task. 
 more detail see [Implementation](#Implementation).
- 
-`ecron` does not poll the system on a second-by-second basis like cron does.
-The advantage of not doing this is to avoid lots of messages flying around. 
 
-All jobs are managed in one process, rather than running one job per process, 
-which saves lots of processes and avoids taking up a lot of memory. 
-After all, most of the time the process is waiting(do nothing but eat memory). 
 
-It offers:
-
-* Both cron-like scheduling and interval-based scheduling.
-* Well tested by [PropTest](https://github.com/proper-testing/proper) [![codecov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron).
-* Using gen_server timeout(`receive after`) at any given time (rather than reevaluating upcoming jobs every second/minute).
+### Key Features
+- Supports both cron-like and interval-based scheduling.
+- Well-tested with [PropTest](https://github.com/proper-testing/proper) [![codecov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron).
+- Utilizes gen_server timeout mechanism for precise timing.
+- Efficient process management, avoiding high memory usage.
 
 You can find a collection of general practices in [Full Erlang Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Full Elixir Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
 
@@ -43,11 +35,13 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 0.6"}]
+    [{:ecron, "~> 1.0.0"}]
   end
 ```
 
 ## Basic Usage 
+
+Configure Ecoron in your sys.config file with timezone and job specifications:
 
 ```erlang
 %% sys.config
@@ -89,14 +83,8 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
 * Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check this for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
 
 ## Supervisor Tree Usage
-`ecron` starts with a standalone process(`ecron_local`) to manage all jobs by default,
-but you can also set up your own job management process for each application,
-which has the advantage that you can precisely control its start time and stop timing.
-This has the advantage that you can precisely control when it starts and when it stops.
-The Jobs between various applications do not affect each other.
+Ecron can be integrated into your application's supervision tree for better control over its lifecycle:
 
-`ecron` must be included in your application's supervision tree.
-All of your configuration is passed into the supervisor:
 ```erlang
 %%config/sys.config
 [{your_app, [{crontab_jobs, [
@@ -129,6 +117,8 @@ init(_Args) ->
 ```
 ## Advanced Usage 
 
+Ecron allows for advanced scheduling and manipulation of cron jobs:
+
 ```erlang
 %% Same as: Spec = "0 * 0-5,18 * * 0-5", 
 Spec = #{second => [0], 
@@ -156,7 +146,8 @@ EveryMFA = {io, format, ["Runs every 120 second.~n"]},
 ```
 ## Debug Support
 
-There are some function to get information for debugging jobs.
+Ecron provides functions to assist with debugging:
+
 ````erlang
 1> ecron:deactivate(CrontabName).
 ok
@@ -201,7 +192,9 @@ ok
 }
 ````
 ## Implementation
-The local_jobs workflow is as follows:
+
+Ecron uses an efficient approach to manage job execution times and intervals:
+
 1. The top supervisor `ecron_sup` starts firstly.
 2. then `ecron_sup` starts a child `ecron`(gen_server worker).
 3. `ecron` will look for configuration `{local_jobs, Jobs}` at initialization.
@@ -233,8 +226,9 @@ Additionally, you can use `ecron:statistic(Name)` to see the job's latest 16 res
 [Check this for global_jobs workflow](https://github.com/zhongwencool/ecron/blob/master/doc/global.md#Implementation).       
 
 ## Telemetry
-Ecron publish events through telemetry, you can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md), 
-such as you can monitor events dispatch duration and failures to create alerts which notify somebody.
+
+Ecron publishes events through telemetry, allowing for monitoring and alerting,
+You can handle those events by [this guide](https://github.com/zhongwencool/ecron/blob/master/doc/telemetry.md).
 
 ## CRON Expression Format
 
@@ -309,18 +303,20 @@ Entry                  | Description                                | Equivalent
 
 ## Intervals
 
-You may also execute job at fixed intervals, starting at the time it's added or cron is run. 
-This is supported by formatting the cron spec like this:
+Ecron also supports scheduling jobs at fixed intervals:
+
 ```shell
 @every <duration>
 ```
-For example, "@every 1h30m10s" would indicate a schedule that activates after 1 hour, 30 minutes, 10 seconds, and then every interval after that.
+For example, @every 1h30m10s schedules a job to run every 1 hour, 30 minutes, and 10 seconds.
 
 >Note: The interval doesn't take the job runtime into account. 
 >For example, if a job takes 3 minutes to run, and it is scheduled to run every 5 minutes, 
 >it only has 2 minutes of idle time between each run.
   
 ## Test
+
+This command will run property-based tests, common tests, and generate a coverage report with verbose output.
 
 ```shell
   $ rebar3 do proper -c, ct -c, cover -v
