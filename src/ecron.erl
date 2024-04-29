@@ -81,8 +81,8 @@
 -type parse_error() ::
     invalid_time | invalid_spec | month | day_of_month | day_of_week | hour | minute | second.
 
--type start_at() :: unlimited | calendar:datetime().
--type end_at() :: unlimited | calendar:datetime().
+-type start_at() :: unlimited | calendar:time().
+-type end_at() :: unlimited | calendar:time().
 -type option() :: {singleton, boolean()} | {max_count, pos_integer() | unlimited}.
 -type options() :: [option()].
 

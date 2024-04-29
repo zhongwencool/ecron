@@ -24,7 +24,7 @@ add_every_4am_job() ->
 %% by ecron:add_with_time/5
 add_limited_start_end_time_job2() ->
     MFA = {?MODULE, inspect, ["at minute 23 past every 2nd hour from 0 through 20."]},
-    Start = {{10, 0, 0}}, %% time or `unlimited`
+    Start = {10, 0, 0}, %% time or `unlimited`
     End = unlimited, %% time or `unlimited`
     ecron:add_with_time(make_ref(), "0 23 0-20/2 * * *", MFA, Start, End).
 
