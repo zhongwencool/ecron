@@ -48,27 +48,41 @@ extend_spec(Min, Max) ->
 
 maybe_error_spec() ->
     [
-        error_integer_spec(0, 100), %% second
-        error_integer_spec(50, 80), %% minute
-        error_integer_spec(20, 30), %% hour
-        error_integer_spec(20, 40), %% day_of_month
-        error_integer_spec(10, 20), %% month
-        error_integer_spec(5, 10)  %% day_of_week
+        %% second
+        error_integer_spec(0, 100),
+        %% minute
+        error_integer_spec(50, 80),
+        %% hour
+        error_integer_spec(20, 30),
+        %% day_of_month
+        error_integer_spec(20, 40),
+        %% month
+        error_integer_spec(10, 20),
+        %% day_of_week
+        error_integer_spec(5, 10)
     ].
 
 integer_spec(Min, Max) ->
     frequency([
-        {1, "*"}, %% "*"
-        {1, {'*/Step', general, Min, Max, range(1, 31)}}, %% "*/Step"
-        {8, ?SIZED(S, integer_spec(S, Min, Max))}]).
+        %% "*"
+        {1, "*"},
+        %% "*/Step"
+        {1, {'*/Step', general, Min, Max, range(1, 31)}},
+        {8, ?SIZED(S, integer_spec(S, Min, Max))}
+    ]).
 
 integer_spec(S, Min, Max) ->
     oneof([
-        {'Integer', general, range(Min, Max)}, %% 1
-        'Min-Max'(general, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 31)), %% 1-5/2
-        {'Min/Step', general, range(Min, Max), Max, range(1, 31)}, %% 10/2
-        ?LAZY({list, general, [integer_spec(S - 1, Min, Max), integer_spec(S - 2, Min, Max)]}) %% 1,2-6/2...
+        %% 1
+        {'Integer', general, range(Min, Max)},
+        %% 1-5
+        'Min-Max'(general, range(Min, Max), Max),
+        %% 1-5/2
+        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 31)),
+        %% 10/2
+        {'Min/Step', general, range(Min, Max), Max, range(1, 31)},
+        %% 1,2-6/2...
+        ?LAZY({list, general, [integer_spec(S - 1, Min, Max), integer_spec(S - 2, Min, Max)]})
     ]).
 
 error_integer_spec(Min, Max) ->
@@ -76,10 +90,18 @@ error_integer_spec(Min, Max) ->
 
 error_integer_spec(S, Min, Max) ->
     oneof([
-        {'Integer', general, range(Min, Max)}, %% 1
-        'Min-Max'(general, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 31)), %% 1-5/2
-        ?LAZY({list, general, [error_integer_spec(S - 1, Min, Max), error_integer_spec(S - 2, Min, Max)]}) %% 1,2-6/2...
+        %% 1
+        {'Integer', general, range(Min, Max)},
+        %% 1-5
+        'Min-Max'(general, range(Min, Max), Max),
+        %% 1-5/2
+        'Min-Max/Step'(general, range(Min, Max), Max, range(1, 31)),
+        %% 1,2-6/2...
+        ?LAZY(
+            {list, general, [
+                error_integer_spec(S - 1, Min, Max), error_integer_spec(S - 2, Min, Max)
+            ]}
+        )
     ]).
 
 alphabet_spec(Type, Min, Max) ->
@@ -87,11 +109,20 @@ alphabet_spec(Type, Min, Max) ->
 
 alphabet_spec(S, Type, Min, Max) ->
     oneof([
-        {'Integer', Type, range(Min, Max)}, %% 1
-        'Min-Max'(Type, range(Min, Max), Max), %% 1-5
-        'Min-Max/Step'(Type, range(Min, Max), Max, range(1, 31)), %% 1-5/2
-        {'Min/Step', Type, range(Min, Max), Max, range(1, 31)}, %% 10/2
-        ?LAZY({list, Type, [alphabet_spec(S - 1, Type, Min, Max), alphabet_spec(S - 2, Type, Min, Max)]}) %% 1,2-6/2...
+        %% 1
+        {'Integer', Type, range(Min, Max)},
+        %% 1-5
+        'Min-Max'(Type, range(Min, Max), Max),
+        %% 1-5/2
+        'Min-Max/Step'(Type, range(Min, Max), Max, range(1, 31)),
+        %% 10/2
+        {'Min/Step', Type, range(Min, Max), Max, range(1, 31)},
+        %% 1,2-6/2...
+        ?LAZY(
+            {list, Type, [
+                alphabet_spec(S - 1, Type, Min, Max), alphabet_spec(S - 2, Type, Min, Max)
+            ]}
+        )
     ]).
 
 crontab_spec() ->
@@ -107,7 +138,11 @@ crontab_spec() ->
 'Min-Max'(Type, Min, MaxLimit) ->
     ?LET({MinF, MaxLimitF}, {Min, MaxLimit}, {'Min-Max', Type, MinF, range(MinF, MaxLimitF)}).
 'Min-Max/Step'(Type, Min, MaxLimit, Step) ->
-    ?LET({MinF, MaxLimitF, StepF}, {Min, MaxLimit, Step}, {'Min-Max/Step', Type, MinF, range(MinF, MaxLimitF), StepF}).
+    ?LET(
+        {MinF, MaxLimitF, StepF},
+        {Min, MaxLimit, Step},
+        {'Min-Max/Step', Type, MinF, range(MinF, MaxLimitF), StepF}
+    ).
 
 map_spec() ->
     ?LET(Spec, extend_spec_2(), prop_ecron:cron_spec_to_map(Spec)).

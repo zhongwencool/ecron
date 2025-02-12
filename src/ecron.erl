@@ -369,8 +369,6 @@ init([JobTab, Jobs]) ->
     TimerTab = ets:new(ecron_timer, [ordered_set, protected, {keypos, #timer.key}]),
     TimeZone = get_time_zone(),
     MaxTimeout = application:get_env(?Ecron, adjusting_time_second, 7 * 24 * 3600),
-    is_number(MaxTimeout) andalso MaxTimeout > 0 andalso MaxTimeout < 4294967295 orelse
-        throw({error, invalid_max_timeout, MaxTimeout}),
     [ets:insert_new(JobTab, Job) || Job <- Jobs],
     [
         add_job(JobTab, TimerTab, Job, TimeZone, Opts, true)

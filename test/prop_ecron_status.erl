@@ -64,8 +64,8 @@ prop_cron_apply_error() ->
             application:ensure_all_started(ecron),
             error_logger:tty(false),
             OkMFA = {?MODULE, long_echo, [650, self(), ?FUNCTION_NAME]},
-            {ok, OkName} = ecron:add({Name, ?FUNCTION_NAME}, "@every 1s", OkMFA),
             WrongMFA = {?MODULE, echo, [wrong, Request]},
+            {ok, OkName} = ecron:add({Name, ?FUNCTION_NAME}, "@every 1s", OkMFA),
             {ok, WrongName} = ecron:add(Name, "@every 1s", WrongMFA),
             timer:sleep(1900),
             {ok, #{

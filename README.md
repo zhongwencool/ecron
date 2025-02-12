@@ -35,7 +35,7 @@ You can find a collection of general practices in [Full Erlang Examples](https:/
  ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 1.0.0"}]
+    [{:ecron, "~> 1.0.1"}]
   end
 ```
 
