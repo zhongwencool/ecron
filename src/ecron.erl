@@ -833,11 +833,16 @@ spec_min([{Key, Value} | Rest], Acc) ->
         end,
     spec_min(Rest, NewAcc).
 
-next_timeout(#state{timer_tab = TimerTab, max_timeout = MaxTimeout}) ->
+next_timeout(#state{timer_tab = TimerTab, max_timeout = MaxTimeout} = State) ->
     case ets:first(TimerTab) of
         '$end_of_table' ->
             infinity;
-        {Due, _} when is_integer(Due) -> min(max(Due - current_millisecond(), 0), MaxTimeout)
+        {Due, _} when is_integer(Due) ->
+            Now = current_millisecond(),
+            case Due =< Now of
+                true -> tick(State);
+                false -> min(Due - Now, MaxTimeout)
+            end
     end.
 
 to_rfc3339(Next) -> calendar:system_time_to_rfc3339(Next div 1000, [{unit, second}]).
