@@ -64,7 +64,8 @@ init([]) ->
                 [
                     #{
                         id => ?MONITOR_WORKER,
-                        start => {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
+                        start =>
+                            {?MONITOR_WORKER, start_link, [{local, ?MONITOR_WORKER}, GlobalJobs]},
                         restart => permanent,
                         shutdown => 1000,
                         type => worker,

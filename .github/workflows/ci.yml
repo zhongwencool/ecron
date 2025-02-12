@@ -8,8 +8,8 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
-        otp: ['24.3', '25.3', '26.2']
-        rebar3: ['3.20.0', '3.19.0']
+        otp: ['27', '26', '25', '24']
+        rebar3: ['3.22']
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -23,10 +23,10 @@ jobs:
       - run: rebar3 as test ct -c
       - run: rebar3 as test cover
       - name: Generate code coverage report
-        if: matrix.otp == '26.2' && matrix.rebar3 == '3.20.0'
+        if: matrix.otp == '27' && matrix.rebar3 == '3.22'
         run: rebar3 as test covertool generate
       - name: Upload code coverage to Codecov
-        if: matrix.otp == '26.2' && matrix.rebar3 == '3.20.0'
+        if: matrix.otp == '27' && matrix.rebar3 == '3.22'
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

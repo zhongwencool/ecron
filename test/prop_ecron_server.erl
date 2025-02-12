@@ -7,13 +7,25 @@
 -export([prop_server/1, prop_server/0]).
 
 -export([
-    add_cron_new/3, add_cron_existing/3, add_cron_new/4, add_cron_existing/4,
-    add_with_count/3, add_with_datetime/3,
-    add_every_new/3, add_every_existing/3, add_every_new/4, add_every_existing/4,
-    delete_existing/1, delete_unknown/1,
-    deactivate_unknown/1, deactivate_existing/1,
-    activate_unknown/1, activate_existing/1,
-    statistic_unknown/1, statistic_existing/1, statistic_all/0,
+    add_cron_new/3,
+    add_cron_existing/3,
+    add_cron_new/4,
+    add_cron_existing/4,
+    add_with_count/3,
+    add_with_datetime/3,
+    add_every_new/3,
+    add_every_existing/3,
+    add_every_new/4,
+    add_every_existing/4,
+    delete_existing/1,
+    delete_unknown/1,
+    deactivate_unknown/1,
+    deactivate_existing/1,
+    activate_unknown/1,
+    activate_existing/1,
+    statistic_unknown/1,
+    statistic_existing/1,
+    statistic_all/0,
     reload/0
 ]).
 
@@ -23,7 +35,9 @@
 prop_server(doc) -> "job stateful faield";
 prop_server(opts) -> [{numtests, 7000}].
 prop_server() ->
-    ?FORALL(Cmds, commands(?MODULE),
+    ?FORALL(
+        Cmds,
+        commands(?MODULE),
         begin
             application:set_env(ecron, local_jobs, []),
             application:set_env(ecron, global_jobs, []),
@@ -31,10 +45,15 @@ prop_server() ->
             ecron:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),
             ets:delete_all_objects(?LocalJob),
-            ?WHENFAIL(io:format("History: ~p\nState: ~p\nResult: ~p\n",
-                [History, State, Result]),
-                aggregate(command_names(Cmds), Result =:= ok))
-        end).
+            ?WHENFAIL(
+                io:format(
+                    "History: ~p\nState: ~p\nResult: ~p\n",
+                    [History, State, Result]
+                ),
+                aggregate(command_names(Cmds), Result =:= ok)
+            )
+        end
+    ).
 
 %%%%%%%%%%%%%
 %%% MODEL %%%
@@ -48,12 +67,27 @@ command(State) ->
     Empty = State =/= #{},
     frequency(
         [
-            {5, {call, ?MODULE, add_cron_new, [new_name(State), prop_ecron_spec:crontab_spec(), mfa()]}},
-            {5, {call, ?MODULE, add_cron_new, [new_name(State), prop_ecron_spec:crontab_spec(), mfa(), datetime()]}},
+            {5,
+                {call, ?MODULE, add_cron_new, [
+                    new_name(State), prop_ecron_spec:crontab_spec(), mfa()
+                ]}},
+            {5,
+                {call, ?MODULE, add_cron_new, [
+                    new_name(State), prop_ecron_spec:crontab_spec(), mfa(), datetime()
+                ]}},
             {4, {call, ?MODULE, add_every_new, [new_name(State), range(1, ?MAX_TIMEOUT), mfa()]}},
-            {4, {call, ?MODULE, add_every_new, [new_name(State), range(1, ?MAX_TIMEOUT), mfa(), datetime()]}},
-            {4, {call, ?MODULE, add_with_count, [prop_ecron_spec:crontab_spec(), mfa(), range(100, 1000)]}},
-            {4, {call, ?MODULE, add_with_datetime, [prop_ecron_spec:crontab_spec(), mfa(), datetime()]}},
+            {4,
+                {call, ?MODULE, add_every_new, [
+                    new_name(State), range(1, ?MAX_TIMEOUT), mfa(), datetime()
+                ]}},
+            {4,
+                {call, ?MODULE, add_with_count, [
+                    prop_ecron_spec:crontab_spec(), mfa(), range(100, 1000)
+                ]}},
+            {4,
+                {call, ?MODULE, add_with_datetime, [
+                    prop_ecron_spec:crontab_spec(), mfa(), datetime()
+                ]}},
             {1, {call, ?MODULE, delete_unknown, [new_name(State)]}},
             {1, {call, ?MODULE, deactivate_unknown, [new_name(State)]}},
             {1, {call, ?MODULE, activate_unknown, [new_name(State)]}},
@@ -61,10 +95,34 @@ command(State) ->
             {1, {call, ?MODULE, statistic_all, []}},
             {1, {call, ?MODULE, reload, []}}
         ] ++
-            [{1, {call, ?MODULE, add_cron_existing, [exist_name(State), prop_ecron_spec:crontab_spec(), mfa()]}} || Empty] ++
-            [{1, {call, ?MODULE, add_cron_existing, [exist_name(State), prop_ecron_spec:crontab_spec(), mfa(), datetime()]}} || Empty] ++
-            [{1, {call, ?MODULE, add_every_existing, [exist_name(State), range(1, ?MAX_TIMEOUT), mfa()]}} || Empty] ++
-            [{1, {call, ?MODULE, add_every_existing, [exist_name(State), range(1, ?MAX_TIMEOUT), mfa(), datetime()]}} || Empty] ++
+            [
+                {1,
+                    {call, ?MODULE, add_cron_existing, [
+                        exist_name(State), prop_ecron_spec:crontab_spec(), mfa()
+                    ]}}
+             || Empty
+            ] ++
+            [
+                {1,
+                    {call, ?MODULE, add_cron_existing, [
+                        exist_name(State), prop_ecron_spec:crontab_spec(), mfa(), datetime()
+                    ]}}
+             || Empty
+            ] ++
+            [
+                {1,
+                    {call, ?MODULE, add_every_existing, [
+                        exist_name(State), range(1, ?MAX_TIMEOUT), mfa()
+                    ]}}
+             || Empty
+            ] ++
+            [
+                {1,
+                    {call, ?MODULE, add_every_existing, [
+                        exist_name(State), range(1, ?MAX_TIMEOUT), mfa(), datetime()
+                    ]}}
+             || Empty
+            ] ++
             [{4, {call, ?MODULE, delete_existing, [exist_name(State)]}} || Empty] ++
             [{8, {call, ?MODULE, deactivate_existing, [exist_name(State)]}} || Empty] ++
             [{8, {call, ?MODULE, activate_existing, [exist_name(State)]}} || Empty] ++
@@ -76,22 +134,16 @@ command(State) ->
 
 precondition(State, {call, _Mod, add_cron_new, [Name | _]}) -> not_in(Name, State);
 precondition(State, {call, _Mod, add_cron_existing, [Name | _]}) -> in(Name, State);
-
 precondition(State, {call, _Mod, add_every_new, [Name | _]}) -> not_in(Name, State);
 precondition(State, {call, _Mod, add_every_existing, [Name | _]}) -> in(Name, State);
-
 precondition(State, {call, _Mod, delete_unknown, [Name | _]}) -> not_in(Name, State);
 precondition(State, {call, _Mod, delete_existing, [Name | _]}) -> in(Name, State);
-
 precondition(State, {call, _Mod, deactivate_unknown, [Name | _]}) -> not_in(Name, State);
 precondition(State, {call, _Mod, deactivate_existing, [Name | _]}) -> in(Name, State);
-
 precondition(State, {call, _Mod, activate_unknown, [Name | _]}) -> not_in(Name, State);
 precondition(State, {call, _Mod, activate_existing, [Name | _]}) -> in(Name, State);
-
 precondition(State, {call, _Mod, statistic_unknown, [Name | _]}) -> not_in(Name, State);
 precondition(State, {call, _Mod, statistic_existing, [Name | _]}) -> in(Name, State);
-
 precondition(_State, {call, _Mod, _Fun, _Args}) -> true.
 
 %% @doc Given the state `State' *prior* to the call
@@ -106,7 +158,7 @@ postcondition(_State, {call, _Mod, add_with_datetime, [_ | _] = Args}, Res) ->
     check_add_with_limit(Args, Res);
 postcondition(_State, {call, _Mod, add_cron_existing, [_Name | _]}, Res) ->
     element(1, Res) =:= error andalso
-        ( element(2, Res) =:= already_exist orelse element(2, Res)  =:= invalid_time);
+        (element(2, Res) =:= already_exist orelse element(2, Res) =:= invalid_time);
 postcondition(_State, {call, _Mod, add_every_new, [_Name | _] = Args}, Res) ->
     check_add_new(Args, Res);
 postcondition(_State, {call, _Mod, add_every_existing, [_Name | _]}, Res) ->
@@ -147,7 +199,8 @@ next_state(State, Res, {call, _Mod, add_with_count, [Spec, MFA, _Count]}) ->
     State#{Name => #{cron => new_cron([Name, Spec, MFA]), worker => Res}};
 next_state(State, Res, {call, _Mod, add_with_datetime, [Spec, MFA, {Start, End}]}) ->
     case is_valid_time(Spec, Start, End) of
-        false -> State;
+        false ->
+            State;
         true ->
             Name = make_ref(),
             State#{Name => #{cron => new_cron([Name, Spec, MFA, {Start, End}]), worker => Res}}
@@ -159,11 +212,16 @@ next_state(State, Res, {call, _Mod, add_every_new, [Name, Spec, _MFA, {Start, En
         false -> State;
         true -> State#{Name => #{cron => new_every(Args), worker => Res}}
     end;
-next_state(State, _Res, {call, _Mod, delete_existing, [Name]}) -> maps:remove(Name, State);
-next_state(State, _Res, {call, _Mod, deactivate_existing, [_Name]}) -> State;
-next_state(State, _Res, {call, _Mod, activate_existing, [_Name]}) -> State;
-next_state(State, _Res, {call, _Mod, statistic_existing, [_Name]}) -> State;
-next_state(State, _Res, {call, _Mod, _Fun, _Args}) -> State.
+next_state(State, _Res, {call, _Mod, delete_existing, [Name]}) ->
+    maps:remove(Name, State);
+next_state(State, _Res, {call, _Mod, deactivate_existing, [_Name]}) ->
+    State;
+next_state(State, _Res, {call, _Mod, activate_existing, [_Name]}) ->
+    State;
+next_state(State, _Res, {call, _Mod, statistic_existing, [_Name]}) ->
+    State;
+next_state(State, _Res, {call, _Mod, _Fun, _Args}) ->
+    State.
 
 %%%%%%%%%%%%%%%
 %%% Helpers %%%
@@ -173,23 +231,33 @@ new_cron([Name, Spec, MFA]) ->
     new_cron([Name, Spec, MFA, {unlimited, unlimited}]);
 new_cron([Name, Spec, MFA, {Start, End}]) ->
     {ok, Type, Crontab} = ecron_spec:parse_spec(Spec),
-    #{type => Type, name => Name,
-        crontab => Crontab, mfa => MFA,
-        start_time => Start, end_time => End
+    #{
+        type => Type,
+        name => Name,
+        crontab => Crontab,
+        mfa => MFA,
+        start_time => Start,
+        end_time => End
     }.
 
 new_every([Name, Second, MFA]) ->
     new_every([Name, Second, MFA, {unlimited, unlimited}]);
 new_every([Name, Second, MFA, {Start, End}]) ->
-    #{type => every, name => Name,
-        crontab => Second, start_time => Start,
-        end_time => End, mfa => MFA
+    #{
+        type => every,
+        name => Name,
+        crontab => Second,
+        start_time => Start,
+        end_time => End,
+        mfa => MFA
     }.
-check_add_new([Name, _Spec, _MFA | _], {ok, Name}) -> true;
+check_add_new([Name, _Spec, _MFA | _], {ok, Name}) ->
+    true;
 check_add_new([_Name, Spec, _MFA, {StartTime, EndTime}], {error, invalid_time, _}) ->
     not is_valid_time(Spec, StartTime, EndTime).
 
-check_add_with_limit([_Spec, _MFA | _], {ok, _Name}) -> true;
+check_add_with_limit([_Spec, _MFA | _], {ok, _Name}) ->
+    true;
 check_add_with_limit([Spec, _MFA, {StartTime, EndTime}], {error, invalid_time, _}) ->
     not is_valid_time(Spec, StartTime, EndTime).
 
@@ -201,18 +269,20 @@ is_valid_time(Spec, {SH, SM, SS}, {EH, EM, ES}) ->
             false;
         true ->
             case ecron_spec:parse_spec(Spec) of
-            {ok, cron, Job} ->
-                #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = Job,
-                Hour = parse_max(23, HourSpec),
-                Minute = parse_max(59, MinuteSpec),
-                Second = parse_max(59, SecondSpec),
-                SpecTime = Hour * 3600 + Minute * 60 + Second,
-                SpecTime >= Start andalso SpecTime =< End;
-                _ -> true
+                {ok, cron, Job} ->
+                    #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = Job,
+                    Hour = parse_max(23, HourSpec),
+                    Minute = parse_max(59, MinuteSpec),
+                    Second = parse_max(59, SecondSpec),
+                    SpecTime = Hour * 3600 + Minute * 60 + Second,
+                    SpecTime >= Start andalso SpecTime =< End;
+                _ ->
+                    true
             end
     end.
 
-parse_max(Max, '*') -> Max;
+parse_max(Max, '*') ->
+    Max;
 parse_max(_DefaultMax, List) ->
     case lists:last(List) of
         {_, Max} -> Max;
@@ -222,10 +292,12 @@ parse_max(_DefaultMax, List) ->
 add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_new(Name, Spec, MFA, {Start, End}) -> ecron:add_with_time(Name, Spec, MFA, Start, End).
-add_cron_existing(Name, Spec, MFA, {Start, End}) -> ecron:add_with_time(Name, Spec, MFA, Start, End).
+add_cron_existing(Name, Spec, MFA, {Start, End}) ->
+    ecron:add_with_time(Name, Spec, MFA, Start, End).
 
 add_with_count(Spec, MFA, Count) -> ecron:add_with_count(Spec, MFA, Count).
-add_with_datetime(Spec, MFA, {Start, End}) -> ecron:add_with_time(make_ref(), Spec, MFA, Start, End).
+add_with_datetime(Spec, MFA, {Start, End}) ->
+    ecron:add_with_time(make_ref(), Spec, MFA, Start, End).
 
 add_every_new(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
 add_every_existing(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
@@ -248,27 +320,39 @@ reload() -> ecron:reload().
 
 valid_statistic(State, Name, [Res]) ->
     case maps:find(Name, State) of
-        error -> false;
+        error ->
+            false;
         {ok, #{cron := #{type := Type, crontab := CrontabSpec, mfa := MFAExpect}}} ->
-            #{crontab := Cron, start_time := StartTime, end_time := EndTime,
-                failed := Failed, next := Next, ok := Ok, mfa := MFA,
-                results := Results, run_microsecond := RunMs
+            #{
+                crontab := Cron,
+                start_time := StartTime,
+                end_time := EndTime,
+                failed := Failed,
+                next := Next,
+                ok := Ok,
+                mfa := MFA,
+                results := Results,
+                run_microsecond := RunMs
             } = Res,
-            case Cron =:= CrontabSpec andalso
-                Failed =:= 0 andalso
-                Ok >= 0 andalso
-                MFAExpect =:= MFA andalso
-                length(Results) =< 20 andalso
-                length(Results) =:= length(RunMs)
+            case
+                Cron =:= CrontabSpec andalso
+                    Failed =:= 0 andalso
+                    Ok >= 0 andalso
+                    MFAExpect =:= MFA andalso
+                    length(Results) =< 20 andalso
+                    length(Results) =:= length(RunMs)
             of
                 true ->
                     case Type of
                         cron ->
                             prop_ecron:check_cron_result(CrontabSpec, StartTime, EndTime, Next);
                         every ->
-                            prop_ecron:check_every_result(CrontabSpec, StartTime, EndTime, local, Next)
+                            prop_ecron:check_every_result(
+                                CrontabSpec, StartTime, EndTime, local, Next
+                            )
                     end;
-                false -> false
+                false ->
+                    false
             end
     end.
 

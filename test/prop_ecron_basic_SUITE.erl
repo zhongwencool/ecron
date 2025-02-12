@@ -15,7 +15,7 @@ suite() ->
 
 all() ->
     [
-        basic,error_start_end_time
+        basic, error_start_end_time
     ].
 
 groups() -> [].
@@ -33,28 +33,33 @@ init_per_testcase(_TestCase, Config) ->
     Config.
 
 basic(_Config) ->
-    JobName  = check_mail,
-    MFA = {io,format,["Mail checking~n"]},
+    JobName = check_mail,
+    MFA = {io, format, ["Mail checking~n"]},
     {ok, JobName} = ecron:add(?NAME, JobName, "0 0 8 * * 1-5", MFA, unlimited, unlimited, []),
     {ok, Result} = ecron:statistic(?NAME, JobName),
     [Result1] = ecron:statistic(?NAME),
     [] = ecron:statistic(ecron_not_found),
     ?assertEqual(Result1, Result, "ecron:statistic/2"),
-    #{crontab :=
-    #{day_of_month := '*',
-        day_of_week := [{1,5}],
-        hour := "\b",
-        minute := [0],
-        month := '*',
-        second := [0]} = CrontabSpec,
-        end_time := {23,59,59},
+    #{
+        crontab :=
+            #{
+                day_of_month := '*',
+                day_of_week := [{1, 5}],
+                hour := "\b",
+                minute := [0],
+                month := '*',
+                second := [0]
+            } = CrontabSpec,
+        end_time := {23, 59, 59},
         failed := 0,
         mfa := MFA,
         name := check_mail,
         next := Next,
-        opts := [{singleton,true},{max_count,unlimited}],
-        start_time := {0,0,0},
-        status := activate,type := cron} = Result,
+        opts := [{singleton, true}, {max_count, unlimited}],
+        start_time := {0, 0, 0},
+        status := activate,
+        type := cron
+    } = Result,
     true = prop_ecron:check_cron_result(CrontabSpec, {0, 0, 0}, {23, 59, 59}, Next),
     ok = ecron:deactivate(?NAME, JobName),
     {ok, #{status := deactivate}} = ecron:statistic(?NAME, JobName),
@@ -63,12 +68,20 @@ basic(_Config) ->
     ok.
 
 error_start_end_time(_Config) ->
-    JobName  = check_mail_with_time,
-    MFA = {io,format,["Mail checking~n"]},
-    {error, invalid_time, _} = ecron:add_with_time(JobName, "0 0 8 * * 1-5", MFA, {12, 0, 0}, {11, 0, 0}),
-    {error, invalid_time, _} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, {9, 20, 0}, {12, 0, 0}),
-    {error, invalid_time, _} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, {109, 20, 0}, {12, 0, 0}),
-    {error, invalid_time, _} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, {9, 20, 0}, 12),
+    JobName = check_mail_with_time,
+    MFA = {io, format, ["Mail checking~n"]},
+    {error, invalid_time, _} = ecron:add_with_time(
+        JobName, "0 0 8 * * 1-5", MFA, {12, 0, 0}, {11, 0, 0}
+    ),
+    {error, invalid_time, _} = ecron:add_with_time(
+        JobName, "0 10 8,9 * * 1-5", MFA, {9, 20, 0}, {12, 0, 0}
+    ),
+    {error, invalid_time, _} = ecron:add_with_time(
+        JobName, "0 10 8,9 * * 1-5", MFA, {109, 20, 0}, {12, 0, 0}
+    ),
+    {error, invalid_time, _} = ecron:add_with_time(
+        JobName, "0 10 8,9 * * 1-5", MFA, {9, 20, 0}, 12
+    ),
     {error, invalid_time, _} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, unlimited, 1),
     {ok, JobName} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, unlimited, unlimited),
     ok = ecron:delete(JobName),

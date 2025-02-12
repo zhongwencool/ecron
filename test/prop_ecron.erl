@@ -20,7 +20,8 @@ spec_to_str(Spec) ->
 
 cron_spec_to_map(Spec) ->
     [Second, Minute, Hour, Day, Month, Week] = [field_to_extend(S) || S <- Spec],
-    #{ second => Second,
+    #{
+        second => Second,
         minute => Minute,
         hour => Hour,
         day_of_month => Day,
@@ -28,18 +29,23 @@ cron_spec_to_map(Spec) ->
         day_of_week => Week
     }.
 
-check_cron_result(_DateSpec, _Start, _End, []) -> true;
+check_cron_result(_DateSpec, _Start, _End, []) ->
+    true;
 check_cron_result(DateSpec, Start, End, [T1 | Rest]) ->
     DateTime = {_, Time} = to_localtime(T1),
-    case is_greater_than_or_equal(Time, Start) andalso
-        is_greater_than_or_equal(End, Time) andalso
-        in_cron_range(DateSpec, DateTime) of
+    case
+        is_greater_than_or_equal(Time, Start) andalso
+            is_greater_than_or_equal(End, Time) andalso
+            in_cron_range(DateSpec, DateTime)
+    of
         true -> check_cron_result(DateSpec, Start, End, Rest);
         false -> false
     end.
 
-check_every_result(_Second, _Start, _End, _ZT, []) -> true;
-check_every_result(_Second, _Start, _End, _ZT, [_]) -> true;
+check_every_result(_Second, _Start, _End, _ZT, []) ->
+    true;
+check_every_result(_Second, _Start, _End, _ZT, [_]) ->
+    true;
 check_every_result(Second, Start, End, ZT, [T1, T2 | Rest]) ->
     case ZT of
         utc ->
@@ -51,18 +57,22 @@ check_every_result(Second, Start, End, ZT, [T1, T2 | Rest]) ->
     end,
     {SH, SM, SS} = Start,
     {EH, EM, ES} = End,
-    StartTime = SH*3600 + SM*60 + SS,
-    EndTime = EH*3600 + EM*60 + ES,
-    Time1 = H1*3600 + M1*60 + S1,
-    Time2 = H2*3600 + M2*60 + S2,
-    case Time1 >= StartTime andalso Time1 =< EndTime
-        andalso Time2 >= StartTime andalso Time2 =< EndTime of
-        false -> false;
+    StartTime = SH * 3600 + SM * 60 + SS,
+    EndTime = EH * 3600 + EM * 60 + ES,
+    Time1 = H1 * 3600 + M1 * 60 + S1,
+    Time2 = H2 * 3600 + M2 * 60 + S2,
+    case
+        Time1 >= StartTime andalso Time1 =< EndTime andalso
+            Time2 >= StartTime andalso Time2 =< EndTime
+    of
+        false ->
+            false;
         true ->
             T22 = calendar:rfc3339_to_system_time(T2, [{unit, second}]),
             T11 = calendar:rfc3339_to_system_time(T1, [{unit, second}]),
             case T22 - T11 =:= Second of
-                true -> check_every_result(Second, Start, End, ZT, [T2 | Rest]);
+                true ->
+                    check_every_result(Second, Start, End, ZT, [T2 | Rest]);
                 false ->
                     {T222, _} = calendar:system_time_to_local_time(T22, second),
                     {T111, _} = calendar:system_time_to_local_time(T11, second),
@@ -70,14 +80,20 @@ check_every_result(Second, Start, End, ZT, [T1, T2 | Rest]) ->
             end
     end.
 
-field_spec_to_str("*") -> "*";
-field_spec_to_str({'*/Step', _Type, _MinLimit, _MaxLimit, Step}) -> "*/" ++ integer_to_list(Step);
-field_spec_to_str({'Integer', Type, Int}) -> int_to_str(Type, Int);
-field_spec_to_str({'Min-Max', Type, Min, Max}) -> int_to_str(Type, Min) ++ "-" ++ int_to_str(Type, Max);
-field_spec_to_str({'Min/Step', Type, Min, _MaxLimit, Step}) -> int_to_str(Type, Min) ++ "/" ++ integer_to_list(Step);
+field_spec_to_str("*") ->
+    "*";
+field_spec_to_str({'*/Step', _Type, _MinLimit, _MaxLimit, Step}) ->
+    "*/" ++ integer_to_list(Step);
+field_spec_to_str({'Integer', Type, Int}) ->
+    int_to_str(Type, Int);
+field_spec_to_str({'Min-Max', Type, Min, Max}) ->
+    int_to_str(Type, Min) ++ "-" ++ int_to_str(Type, Max);
+field_spec_to_str({'Min/Step', Type, Min, _MaxLimit, Step}) ->
+    int_to_str(Type, Min) ++ "/" ++ integer_to_list(Step);
 field_spec_to_str({'Min-Max/Step', Type, Min, Max, Step}) ->
     int_to_str(Type, Min) ++ "-" ++ int_to_str(Type, Max) ++ "/" ++ integer_to_list(Step);
-field_spec_to_str({list, _Type, List}) -> string:join(lists:map(fun field_spec_to_str/1, List), ",").
+field_spec_to_str({list, _Type, List}) ->
+    string:join(lists:map(fun field_spec_to_str/1, List), ",").
 
 unzip('*') -> [0];
 unzip(undefined) -> [];
@@ -115,27 +131,45 @@ valid_datetime({Spec, {SH, SM, SS}, {EH, EM, ES}}) ->
             Time >= Start andalso Time =< End
     end.
 
-check_day_of_month([_M, _H, _DOM, _Month, _DOW] = T) -> check_day_of_month(["0" | T]);
-check_day_of_month([_S, _M, _H, "*", _Month, _DOW]) -> true;
-check_day_of_month([_S, _M, _H, _DOM, "*", _DOW]) -> true;
+check_day_of_month([_M, _H, _DOM, _Month, _DOW] = T) ->
+    check_day_of_month(["0" | T]);
+check_day_of_month([_S, _M, _H, "*", _Month, _DOW]) ->
+    true;
+check_day_of_month([_S, _M, _H, _DOM, "*", _DOW]) ->
+    true;
 check_day_of_month([_S, _M, _H, DOM, Month, _DOW]) ->
     DOMExtend = unzip(field_to_extend(DOM)),
     MonthExtend = unzip(field_to_extend(Month)),
     ecron_spec:get_max_day_of_months(MonthExtend) >= lists:max(DOMExtend).
 
-field_to_extend("*") -> '*';
-field_to_extend({'*/Step', _Type, MinLimit, MaxLimit, Step}) -> ecron_spec:zip(lists:seq(MinLimit, MaxLimit, Step));
-field_to_extend({'Integer', _Type, Int}) -> [Int];
-field_to_extend({'Min-Max', _Type, Min, Max}) -> ecron_spec:zip(lists:seq(Min, Max));
-field_to_extend({'Min/Step', _Type, Min, MaxLimit, Step}) -> ecron_spec:zip(lists:seq(Min, MaxLimit, Step));
-field_to_extend({'Min-Max/Step', _Type, Min, Max, Step}) -> ecron_spec:zip(lists:seq(Min, Max, Step));
-field_to_extend({list, _Type, List}) -> ecron_spec:zip(unzip(lists:flatten([field_to_extend(L) || L <- List]))).
+field_to_extend("*") ->
+    '*';
+field_to_extend({'*/Step', _Type, MinLimit, MaxLimit, Step}) ->
+    ecron_spec:zip(lists:seq(MinLimit, MaxLimit, Step));
+field_to_extend({'Integer', _Type, Int}) ->
+    [Int];
+field_to_extend({'Min-Max', _Type, Min, Max}) ->
+    ecron_spec:zip(lists:seq(Min, Max));
+field_to_extend({'Min/Step', _Type, Min, MaxLimit, Step}) ->
+    ecron_spec:zip(lists:seq(Min, MaxLimit, Step));
+field_to_extend({'Min-Max/Step', _Type, Min, Max, Step}) ->
+    ecron_spec:zip(lists:seq(Min, Max, Step));
+field_to_extend({list, _Type, List}) ->
+    ecron_spec:zip(unzip(lists:flatten([field_to_extend(L) || L <- List]))).
 
-to_localtime(unlimited) -> unlimited;
-to_localtime(Time) -> calendar:system_time_to_local_time(calendar:rfc3339_to_system_time(Time, [{unit, millisecond}]), millisecond).
+to_localtime(unlimited) ->
+    unlimited;
+to_localtime(Time) ->
+    calendar:system_time_to_local_time(
+        calendar:rfc3339_to_system_time(Time, [{unit, millisecond}]), millisecond
+    ).
 
-to_utctime(unlimited) -> unlimited;
-to_utctime(Time) -> calendar:system_time_to_universal_time(calendar:rfc3339_to_system_time(Time, [{unit, millisecond}]), millisecond).
+to_utctime(unlimited) ->
+    unlimited;
+to_utctime(Time) ->
+    calendar:system_time_to_universal_time(
+        calendar:rfc3339_to_system_time(Time, [{unit, millisecond}]), millisecond
+    ).
 
 %%%%%%%%%%%%%%%%%
 %%% Internal  %%%
@@ -177,11 +211,18 @@ max_day_of_month(12) -> 31.
 
 in_cron_range(DateSpec, {{Year, Month, Day}, {Hour, Minute, Second}}) ->
     #{
-        second := SecondSpec, minute := MinuteSpec, hour := HourSpec,
-        day_of_month := DayOfMonthSpec, month := MonthSpec,
+        second := SecondSpec,
+        minute := MinuteSpec,
+        hour := HourSpec,
+        day_of_month := DayOfMonthSpec,
+        month := MonthSpec,
         day_of_week := DayOfWeekSpec
     } = DateSpec,
-    Week = case calendar:day_of_the_week(Year, Month, Day) of 7 -> 0; DOW -> DOW end,
+    Week =
+        case calendar:day_of_the_week(Year, Month, Day) of
+            7 -> 0;
+            DOW -> DOW
+        end,
     in_cron_range2(Second, SecondSpec) andalso
         in_cron_range2(Minute, MinuteSpec) andalso
         in_cron_range2(Hour, HourSpec) andalso
@@ -197,6 +238,9 @@ in_cron_week_month_day_range(Week, Day, DayOfWeekSpec, DayOfMonthSpec) ->
 in_cron_range2(_, '*') -> true;
 in_cron_range2(Value, ZipValues) -> lists:member(Value, prop_ecron:unzip(ZipValues)).
 
-is_greater_than_or_equal(unlimited, _Datetime) -> true;
-is_greater_than_or_equal(_, unlimited) -> true;
-is_greater_than_or_equal({H1,M1,S1}, {H2,M2,S2}) -> H1*60*60 + M1*60 + S1 >= H2*60*60 + M2*60 + S2.
+is_greater_than_or_equal(unlimited, _Datetime) ->
+    true;
+is_greater_than_or_equal(_, unlimited) ->
+    true;
+is_greater_than_or_equal({H1, M1, S1}, {H2, M2, S2}) ->
+    H1 * 60 * 60 + M1 * 60 + S1 >= H2 * 60 * 60 + M2 * 60 + S2.
