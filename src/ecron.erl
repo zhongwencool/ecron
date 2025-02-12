@@ -54,12 +54,15 @@
     day_of_week => '*' | [0..6 | {0..5, 1..6}, ...]
 }.
 
+%% from calendar:rfc3339_string/0 exist but not exported
+-type rfc3339_string() :: [byte(), ...].
+
 -type mfargs() :: {M :: module(), F :: atom(), A :: [term()]}.
 -type ecron() :: #{
     name => name(),
     crontab => crontab(),
-    start_time => calendar:rfc3339_string() | unlimited,
-    end_time => calendar:rfc3339_string() | unlimited,
+    start_time => rfc3339_string() | unlimited,
+    end_time => rfc3339_string() | unlimited,
     mfa => mfargs(),
     type => cron | every
 }.
@@ -85,44 +88,44 @@
 -type end_at() :: unlimited | calendar:time().
 -type option() :: {singleton, boolean()} | {max_count, pos_integer() | unlimited}.
 -type options() :: [option()].
+-type ecron_result() :: {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 
 %% @equiv add(ecron_local, JobName, Spec, MFA)
--spec add(name(), crontab_spec(), mfargs()) -> {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+-spec add(name(), crontab_spec(), mfargs()) -> ecron_result().
 add(JobName, Spec, MFA) ->
     add(?LocalJob, JobName, Spec, MFA).
 
 %% @equiv add(Register, JobName, Spec, MFA, unlimited, unlimited, [])
--spec add(register(), name(), crontab_spec(), mfargs()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+-spec add(register(), name(), crontab_spec(), mfargs()) -> ecron_result().
 add(Register, JobName, Spec, MFA) ->
     add(Register, JobName, Spec, MFA, unlimited, unlimited, []).
 
 %% @equiv add_with_count(ecron_local, make_ref(), Spec, MFA, RunCount)
--spec add_with_count(crontab_spec(), mfargs(), pos_integer()) -> {ok, name()} | {error, parse_error(), term()}.
+-spec add_with_count(crontab_spec(), mfargs(), pos_integer()) -> ecron_result().
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
     add_with_count(?LocalJob, make_ref(), Spec, MFA, RunCount).
 
 %% @equiv add(register(), make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
 -spec add_with_count(register(), name(), crontab_spec(), mfargs(), pos_integer()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+    ecron_result().
 add_with_count(Register, JobName, Spec, MFA, RunCount) when is_integer(RunCount) ->
     add(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
 
 %% @equiv add(ecron_local, name(), Spec, MFA, Start, End, [])
 -spec add_with_time(name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
-    {ok, name()} | {error, parse_error(), term()}.
+    ecron_result().
 add_with_time(JobName, Spec, MFA, Start, End) ->
     add_with_time(?LocalJob, JobName, Spec, MFA, Start, End).
 
 %% @equiv add(register(), name(), Spec, MFA, Start, End, [])
 -spec add_with_time(register(), name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
-    {ok, name()} | {error, parse_error(), term()}.
+    ecron_result().
 add_with_time(Register, JobName, Spec, MFA, Start, End) ->
     add(Register, JobName, Spec, MFA, Start, End, []).
 
 %% @equiv add(ecron_local, name(), Spec, MFA, Start, End, [])
 -spec add(name(), crontab_spec(), mfargs(), start_at(), end_at(), options()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+    ecron_result().
 add(JobName, Spec, MFA, Start, End, Opts) ->
     add(?LocalJob, JobName, Spec, MFA, Start, End, Opts).
 
@@ -140,7 +143,7 @@ add(JobName, Spec, MFA, Start, End, Opts) ->
 %% </ul>
 %%
 -spec add(register(), name(), crontab_spec(), mfargs(), start_at(), end_at(), options()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+    ecron_result().
 add(Register, JobName, Spec, MFA, Start, End, Opts) ->
     case ecron_spec:parse_start_end_time(Start, End) of
         {StartTime, EndTime} ->
@@ -157,7 +160,10 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
                                 end_time => EndTime
                             },
                             ValidOpts = ecron_spec:parse_valid_opts(Opts),
-                            gen_server:call(Register, {add, Job, ValidOpts}, infinity);
+                            case gen_server:call(Register, {add, Job, ValidOpts}, infinity) of
+                                {ok, Name} -> {ok, Name};
+                                {error, already_exist} -> {error, already_exist}
+                            end;
                         false ->
                             {error, invalid_time, {Start, End, Spec}}
                     end;
@@ -178,7 +184,8 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
 %% <li>If Dest is a pid(), the timer will be automatically canceled if the process referred to by the pid() is not alive, or when the process exits.</li>
 %% <li><strong>Warning:</strong> Cancels a timer by `erlang:cancel_timer(Ref)' not `ecron:delete/1'.</li>
 %% </ul>
--spec send_after(crontab_spec(), pid() | atom(), term()) -> {ok, reference()} | {error, parse_error(), term()}.
+-spec send_after(crontab_spec(), pid() | atom(), term()) ->
+    {ok, reference()} | {error, parse_error(), term()}.
 send_after(Spec, Pid, Message) ->
     case ecron_spec:parse_spec(Spec) of
         {ok, Type, JobSpec} ->
@@ -191,18 +198,18 @@ send_after(Spec, Pid, Message) ->
     end.
 
 %% @equiv send_interval(ecron_local, make_ref(), Spec, Pid, Message, unlimited, unlimited, [])
--spec send_interval(crontab_spec(), pid(), term()) -> {ok, name()} | {error, parse_error(), term()}.
+-spec send_interval(crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Spec, Pid, Message) ->
     send_interval(?LocalJob, make_ref(), Spec, Pid, Message).
 
 %% @equiv send_interval(ecron_local,name(), Spec, Pid, Message, unlimited, unlimited, [])
--spec send_interval(register(), name(), crontab_spec(), pid(), term()) -> {ok, name()} | {error, parse_error(), term()}.
+-spec send_interval(register(), name(), crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Register, Name, Spec, Pid, Message) ->
     send_interval(Register, Name, Spec, Pid, Message, unlimited, unlimited, []).
 
 %% @equiv send_interval(register(), name(), Spec, self(), Message, Start, End, Option)
 -spec send_interval(register(), name(), crontab_spec(), term(), start_at(), end_at(), options()) ->
-    {ok, name()} | {error, parse_error(), term()}.
+    ecron_result().
 send_interval(Register, Name, Spec, Message, Start, End, Option) ->
     send_interval(Register, Name, Spec, self(), Message, Start, End, Option).
 
@@ -221,8 +228,10 @@ send_interval(Register, Name, Spec, Message, Start, End, Option) ->
 %% </li>
 %% </ul>
 %%
--spec send_interval(register(), name(), crontab_spec(), pid(), term(), start_at(), end_at(), options()) ->
-    {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
+-spec send_interval(
+    register(), name(), crontab_spec(), pid(), term(), start_at(), end_at(), options()
+) ->
+    ecron_result().
 send_interval(Register, JobName, Spec, Pid, Message, Start, End, Option) ->
     add(Register, JobName, Spec, {erlang, send, [Pid, Message]}, Start, End, Option).
 
@@ -233,7 +242,8 @@ delete(JobName) -> delete(?LocalJob, JobName).
 %% @doc
 %% Delete an exist job, if the job is nonexistent, nothing happened.
 -spec delete(register(), name()) -> ok.
-delete(Register, JobName) -> gen_server:call(Register, {delete, JobName}, infinity).
+delete(Register, JobName) ->
+    ok = gen_server:call(Register, {delete, JobName}, infinity).
 
 %% @equiv deactivate(ecron_local, Name).
 -spec deactivate(name()) -> ok | {error, not_found}.
@@ -243,7 +253,11 @@ deactivate(JobName) -> deactivate(?LocalJob, JobName).
 %% Deactivate an exist job, if the job is nonexistent, return `{error, not_found}'.
 %% just freeze the job, use @see activate/2 to unfreeze job.
 -spec deactivate(register(), name()) -> ok | {error, not_found}.
-deactivate(Register, JobName) -> gen_server:call(Register, {deactivate, JobName}, infinity).
+deactivate(Register, JobName) ->
+    case gen_server:call(Register, {deactivate, JobName}, infinity) of
+        ok -> ok;
+        {error, not_found} -> {error, not_found}
+    end.
 
 %% @equiv activate(ecron_local, Name).
 -spec activate(name()) -> ok | {error, not_found}.
@@ -254,7 +268,11 @@ activate(JobName) -> activate(?LocalJob, JobName).
 %% if the job is already activate, nothing happened.
 %% the same effect as reinstall the job from now on.
 -spec activate(register(), name()) -> ok | {error, not_found}.
-activate(Register, JobName) -> gen_server:call(Register, {activate, JobName}, infinity).
+activate(Register, JobName) ->
+    case gen_server:call(Register, {activate, JobName}, infinity) of
+        ok -> ok;
+        {error, not_found} -> {error, not_found}
+    end.
 
 -spec statistic(register() | name()) -> [statistic()].
 statistic(Register) ->
@@ -286,7 +304,9 @@ statistic(Register, JobName) ->
 %% Statistic for all jobs.
 -spec statistic() -> [statistic()].
 statistic() ->
-    Local = ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], ?LocalJob),
+    Local = ets:foldl(
+        fun(Job, Acc) when is_list(Acc) -> [job_to_statistic(Job) | Acc] end, [], ?LocalJob
+    ),
     Global =
         try
             gen_server:call({global, ?GlobalJob}, statistic)
@@ -294,7 +314,9 @@ statistic() ->
             _:_ ->
                 []
         end,
-    Local ++ Global.
+    is_list(Global) orelse throw({error, invalid_statistic, Global}),
+    is_list(Local) orelse throw({error, invalid_statistic, Local}),
+    lists:append(Local, Global).
 
 %% @doc
 %% Reload task manually, such as you should reload manually when the system time has alter a lot.
@@ -306,8 +328,8 @@ reload() ->
 %% @doc
 %% Parse a crontab spec with next trigger time. For debug.
 -spec parse_spec(crontab_spec(), pos_integer()) ->
-    {ok, #{type => cron | every, crontab => crontab_spec(), next => [calendar:rfc3339_string()]}} |
-    {error, atom(), term()}.
+    {ok, #{type => cron | every, crontab => crontab_spec(), next => [rfc3339_string()]}}
+    | {error, atom(), term()}.
 parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
     parse_spec2(ecron_spec:parse_spec(Spec), Num).
 
@@ -346,18 +368,19 @@ init([JobTab, Jobs]) ->
     erlang:process_flag(trap_exit, true),
     TimerTab = ets:new(ecron_timer, [ordered_set, private, {keypos, #timer.key}]),
     TimeZone = get_time_zone(),
-    MaxTimeout = application:get_env(?Ecron, adjusting_time_second, 7 * 24 * 3600) * 1000,
-
+    MaxTimeout = application:get_env(?Ecron, adjusting_time_second, 7 * 24 * 3600),
+    is_number(MaxTimeout) andalso MaxTimeout > 0 andalso MaxTimeout < 4294967295 orelse
+        throw({error, invalid_max_timeout, MaxTimeout}),
     [ets:insert_new(JobTab, Job) || Job <- Jobs],
     [
         add_job(JobTab, TimerTab, Job, TimeZone, Opts, true)
-        || #job{job = Job, opts = Opts, status = activate} <- ets:tab2list(JobTab)
+     || #job{job = Job, opts = Opts, status = activate} <- ets:tab2list(JobTab)
     ],
 
     State = #state{
         timer_tab = TimerTab,
         job_tab = JobTab,
-        max_timeout = MaxTimeout,
+        max_timeout = MaxTimeout * 1000,
         time_zone = TimeZone
     },
     {ok, State, next_timeout(State)}.
@@ -579,10 +602,16 @@ next_schedule_datetime(DateSpec, Min, DateTime, Start, End) ->
                                     case valid_datetime(SecondSpec, Sec) of
                                         false ->
                                             forward_second(DateTime, Min, DateSpec);
-                                        true when Hour =:= SHour andalso Minute =:= SMin andalso Sec < SSec ->
+                                        true when
+                                            Hour =:= SHour andalso Minute =:= SMin andalso
+                                                Sec < SSec
+                                        ->
                                             Begin = {{Year, Month, Day}, {Hour, SMin, SSec - 1}},
                                             forward_second(Begin, Min, DateSpec);
-                                        true when Hour =:= EHour andalso Minute =:= EMin andalso Sec > ESec ->
+                                        true when
+                                            Hour =:= EHour andalso Minute =:= EMin andalso
+                                                Sec > ESec
+                                        ->
                                             forward_day(DateTime, Min, DateSpec);
                                         true ->
                                             DateTime
@@ -806,8 +835,9 @@ spec_min([{Key, Value} | Rest], Acc) ->
 
 next_timeout(#state{timer_tab = TimerTab, max_timeout = MaxTimeout}) ->
     case ets:first(TimerTab) of
-        '$end_of_table' -> infinity;
-        {Due, _} -> min(max(Due - current_millisecond(), 0), MaxTimeout)
+        '$end_of_table' ->
+            infinity;
+        {Due, _} when is_integer(Due) -> min(max(Due - current_millisecond(), 0), MaxTimeout)
     end.
 
 to_rfc3339(Next) -> calendar:system_time_to_rfc3339(Next div 1000, [{unit, second}]).
@@ -914,5 +944,7 @@ day_of_week(Y, M, D) ->
 -compile(export_all).
 
 maybe_spawn_woker_test() ->
-    ?assertEqual({0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)).
+    ?assertEqual(
+        {0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)
+    ).
 -endif.
