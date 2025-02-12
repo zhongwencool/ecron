@@ -366,7 +366,7 @@ start_link(JobTab, JobSpec) when is_atom(JobTab) ->
 
 init([JobTab, Jobs]) ->
     erlang:process_flag(trap_exit, true),
-    TimerTab = ets:new(ecron_timer, [ordered_set, private, {keypos, #timer.key}]),
+    TimerTab = ets:new(ecron_timer, [ordered_set, protected, {keypos, #timer.key}]),
     TimeZone = get_time_zone(),
     MaxTimeout = application:get_env(?Ecron, adjusting_time_second, 7 * 24 * 3600),
     is_number(MaxTimeout) andalso MaxTimeout > 0 andalso MaxTimeout < 4294967295 orelse
