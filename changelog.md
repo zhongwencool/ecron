@@ -1,3 +1,13 @@
+
+### 1.0.2
+- Use ex_doc to update documentation.
+
+### 1.0.1
+- Fix concurrent cron job execution timing issue.
+
+### 1.0.0
+Nothing changed, just update version from 0.6.1 to 1.0.0.
+
 ### 0.6.1
 - fix some spec warning.
 - upgrade telemetry to 1.1.0
