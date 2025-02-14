@@ -1,6 +1,6 @@
 # ecron [![GitHub Actions](https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg)](https://github.com/zhongwencool/ecron) [![CodeCov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron) [![Hex](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron) [![Tag](https://img.shields.io/github/tag/zhongwencool/ecron.svg)](https://img.shields.io/github/tag/zhongwencool/ecron.svg) [![License](https://img.shields.io/hexpm/l/ecron.svg)](https://img.shields.io/hexpm/l/ecron.svg) [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ecron/)
 
-A lightweight and efficient cron-like job scheduling library for Erlang.
+A lightweight and efficient cron-like job scheduling library for Erlang/Elixir.
 
 # Overview
 Ecron is designed to manage scheduled jobs within a single gen_server process, similar to the standard library's [stdlib's timer](http://erlang.org/doc/man/timer.html). It uses an ordered_set ETS table to organize jobs by the next run time, ensuring efficient execution. Unlike traditional cron, Ecoron does not poll the system every second, which reduces message overhead and process usage.

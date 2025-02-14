@@ -2,6 +2,25 @@
 
 -include("ecron.hrl").
 
+?MODULEDOC("""
+`ecron` is a lightweight and efficient cron-like job scheduling library.
+
+Job Management:
+  - `add/3`, `add/4`, `add/6`, `add/7`: Add cron jobs with various options
+  - `add_with_time/5`: Add job with start/end time
+  - `add_with_count/3`: Add job with execution count limit
+  - `delete/1`, `delete/2`: Remove jobs
+  - `deactivate/1`, `activate/1`: Pause/resume jobs
+
+Timer Functions:
+  - `send_interval/3`: Send message at fixed intervals
+  - `send_after/3`: Send message after delay
+
+Monitoring & Control:
+  - `statistic/0`, `statistic/1`: Get job statistics
+  - `reload/0`: Reload configuration
+  - `parse_spec/2`: Parse cron expressions
+""").
 %% API Function
 -export([add/3, add/4, add/6, add/7]).
 -export([add_with_time/5, add_with_time/6]).
@@ -90,65 +109,81 @@
 -type options() :: [option()].
 -type ecron_result() :: {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 
-%% @equiv add(ecron_local, JobName, Spec, MFA)
+?DOC("""
+Same as [`add(ecron_local, JobName, Spec, MFA)`](`add/4`).
+""").
 -spec add(name(), crontab_spec(), mfargs()) -> ecron_result().
 add(JobName, Spec, MFA) ->
     add(?LocalJob, JobName, Spec, MFA).
 
-%% @equiv add(Register, JobName, Spec, MFA, unlimited, unlimited, [])
+?DOC("""
+Same as [`add(Register, JobName, Spec, MFA, unlimited, unlimited, [])`](`add/7`).
+""").
 -spec add(register(), name(), crontab_spec(), mfargs()) -> ecron_result().
 add(Register, JobName, Spec, MFA) ->
     add(Register, JobName, Spec, MFA, unlimited, unlimited, []).
 
-%% @equiv add_with_count(ecron_local, make_ref(), Spec, MFA, RunCount)
+?DOC("""
+Same as [`add_with_count(ecron_local, make_ref(), Spec, MFA, RunCount)`](`add_with_count/5`).
+""").
 -spec add_with_count(crontab_spec(), mfargs(), pos_integer()) -> ecron_result().
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
     add_with_count(?LocalJob, make_ref(), Spec, MFA, RunCount).
 
-%% @equiv add(register(), make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
+?DOC("""
+Same as [`add(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])`](`add/7`).
+""").
 -spec add_with_count(register(), name(), crontab_spec(), mfargs(), pos_integer()) ->
     ecron_result().
 add_with_count(Register, JobName, Spec, MFA, RunCount) when is_integer(RunCount) ->
     add(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
 
-%% @equiv add(ecron_local, name(), Spec, MFA, Start, End, [])
+?DOC("""
+Same as [`add_with_time(ecron_local, JobName, Spec, MFA, Start, End)`](`add_with_time/6`).
+""").
 -spec add_with_time(name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
 add_with_time(JobName, Spec, MFA, Start, End) ->
     add_with_time(?LocalJob, JobName, Spec, MFA, Start, End).
 
-%% @equiv add(register(), name(), Spec, MFA, Start, End, [])
+?DOC("""
+Same as [`add(Register, JobName, Spec, MFA, Start, End, [])`](`add/7`).
+""").
 -spec add_with_time(register(), name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
 add_with_time(Register, JobName, Spec, MFA, Start, End) ->
     add(Register, JobName, Spec, MFA, Start, End, []).
 
-%% @equiv add(ecron_local, name(), Spec, MFA, Start, End, [])
+?DOC("""
+Same as [`add(ecron_local, JobName, Spec, MFA, Start, End, Opts)`](`add/7`).
+""").
 -spec add(name(), crontab_spec(), mfargs(), start_at(), end_at(), options()) ->
     ecron_result().
 add(JobName, Spec, MFA, Start, End, Opts) ->
     add(?LocalJob, JobName, Spec, MFA, Start, End, Opts).
 
-%% @doc
-%% Adds a new crontab job with specified parameters. Jobs exceeding their limits are automatically removed.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - The process name where the job will be registered</li>
-%%   <li>`JobName' - Unique identifier for the job. Returns `{error, already_exist}' if duplicate</li>
-%%   <li>`Spec' - Crontab expression defining execution schedule</li>
-%%   <li>`MFA' - `{Module, Function, Args}' to execute when triggered</li>
-%%   <li>`Start' - Start time `{Hour,Min,Sec}' or `unlimited' for immediate start</li>
-%%   <li>`End' - End time `{Hour,Min,Sec}' or `unlimited' for no end</li>
-%%   <li>`Opts' - Options list:
-%%     <ul>
-%%       <li>`{singleton, boolean()}' - If true (default), prevents concurrent execution</li>
-%%       <li>`{max_count, pos_integer() | unlimited}' - Maximum executions allowed</li>
-%%     </ul>
-%%   </li>
-%% </ul>
-%%
-%% Returns: `{ok, JobName}' | `{error, already_exist}' | `{error, parse_error(), term()}'
+?DOC("""
+Adds a new crontab job with specified parameters. Jobs exceeding their limits are automatically removed.
+
+Parameters:
+* `Register` - The process name where the job will be registered
+* `JobName` - Unique identifier for the job. Returns `{error, already_exist}` if duplicate
+* `Spec` - Crontab expression defining execution schedule
+* `MFA` - `{Module, Function, Args}` to execute when triggered
+* `Start` - Start time `{Hour,Min,Sec}` or `unlimited` for immediate start
+* `End` - End time `{Hour,Min,Sec}` or `unlimited` for no end
+* `Opts` - Options list:
+    * `{singleton, boolean()}` - If true (default), prevents concurrent execution
+    * `{max_count, pos_integer() | unlimited}` - Maximum executions allowed
+
+Returns: `{ok, JobName}` | `{error, already_exist}` | `{error, parse_error(), term()}`
+
+> #### Singleton {: .info}
+> When a job's singleton option is set to true, the system checks 
+> if there is already an instance of the job running before starting a new execution. 
+> If an instance is already running（old pid is alive）, the new execution will be skipped.
+
+""").
 -spec add(register(), name(), crontab_spec(), mfargs(), start_at(), end_at(), options()) ->
     ecron_result().
 add(Register, JobName, Spec, MFA, Start, End, Opts) ->
@@ -181,26 +216,23 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
             {error, invalid_time, {Start, End, Spec}}
     end.
 
-%% @doc
-%% Creates a one-time timer that sends a message when the crontab spec is triggered.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Spec' - Crontab expression defining when to trigger</li>
-%%   <li>`Dest' - Destination pid() or registered name to receive message</li>
-%%   <li>`Message' - Term to send when timer triggers</li>
-%% </ul>
-%%
-%% Notes:
-%% <ul>
-%%   <li>Similar to erlang:send_after/3 but uses crontab format</li>
-%%   <li>Dest pid must be local</li>
-%%   <li>Maximum time value is 4294967295 milliseconds</li>
-%%   <li>Timer auto-cancels if destination process dies</li>
-%%   <li>Use erlang:cancel_timer/1 to cancel, not ecron:delete/1</li>
-%% </ul>
-%%
-%% Returns: `{ok, reference()}' | `{error, parse_error(), term()}'
+?DOC("""
+Creates a one-time timer that sends a message when the crontab spec is triggered.
+
+Parameters:
+* `Spec` - Crontab expression defining when to trigger
+* `Dest` - Destination pid() or registered name to receive message
+* `Message` - Term to send when timer triggers
+
+Notes:
+* Similar to erlang:send_after/3 but uses crontab format
+* Dest pid must be local
+* Maximum time value is 4294967295 milliseconds
+* Timer auto-cancels if destination process dies
+* Use erlang:cancel_timer/1 to cancel, not ecron:delete/1
+
+Returns: `{ok, reference()}` | `{error, parse_error(), term()}`
+""").
 -spec send_after(crontab_spec(), pid() | atom(), term()) ->
     {ok, reference()} | {error, parse_error(), term()}.
 send_after(Spec, Pid, Message) ->
@@ -214,38 +246,43 @@ send_after(Spec, Pid, Message) ->
             Error
     end.
 
-%% @equiv send_interval(ecron_local, make_ref(), Spec, Pid, Message, unlimited, unlimited, [])
+?DOC("""
+Same as [`send_interval(ecron_local, make_ref(), Spec, Pid, Message, unlimited, unlimited, [])`](`send_interval/7`).
+""").
 -spec send_interval(crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Spec, Pid, Message) ->
     send_interval(?LocalJob, make_ref(), Spec, Pid, Message).
 
-%% @equiv send_interval(ecron_local,name(), Spec, Pid, Message, unlimited, unlimited, [])
+?DOC("""
+Same as [`send_interval(Register, Name, Spec, Pid, Message, unlimited, unlimited, [])`](`send_interval/7`).
+""").
 -spec send_interval(register(), name(), crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Register, Name, Spec, Pid, Message) ->
     send_interval(Register, Name, Spec, Pid, Message, unlimited, unlimited, []).
 
-%% @equiv send_interval(register(), name(), Spec, self(), Message, Start, End, Option)
+?DOC("""
+Same as [`send_interval(register(), name(), Spec, self(), Message, Start, End, Option)`](`send_interval/8`).
+""").
 -spec send_interval(register(), name(), crontab_spec(), term(), start_at(), end_at(), options()) ->
     ecron_result().
 send_interval(Register, Name, Spec, Message, Start, End, Option) ->
     send_interval(Register, Name, Spec, self(), Message, Start, End, Option).
 
-%% @doc
-%% Sends a message to a process repeatedly based on a crontab schedule.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job will be registered</li>
-%%   <li>`JobName' - Unique identifier for the job</li>
-%%   <li>`Spec' - Crontab expression defining execution schedule</li>
-%%   <li>`Pid' - Destination process ID or registered name</li>
-%%   <li>`Message' - Term to send on each trigger</li>
-%%   <li>`Start' - Start time `{Hour,Min,Sec}' or `unlimited'</li>
-%%   <li>`End' - End time `{Hour,Min,Sec}' or `unlimited'</li>
-%%   <li>`Option' - Same options as add/7</li>
-%% </ul>
-%%
-%% Returns: Same as add/7
+?DOC("""
+Sends a message to a process repeatedly based on a crontab schedule.
+
+### Parameters
+* `Register` - Process name where job will be registered
+* `JobName` - Unique identifier for the job
+* `Spec` - Crontab expression defining execution schedule
+* `Pid` - Destination process ID or registered name
+* `Message` - Term to send on each trigger
+* `Start` - Start time `{Hour,Min,Sec}` or `unlimited`
+* `End` - End time `{Hour,Min,Sec}` or `unlimited`
+* `Option` - Same options as `add/7`
+
+Returns: `{ok, reference()}` | `{error, parse_error(), term()}`
+""").
 -spec send_interval(
     register(), name(), crontab_spec(), pid(), term(), start_at(), end_at(), options()
 ) ->
@@ -253,38 +290,40 @@ send_interval(Register, Name, Spec, Message, Start, End, Option) ->
 send_interval(Register, JobName, Spec, Pid, Message, Start, End, Option) ->
     add(Register, JobName, Spec, {erlang, send, [Pid, Message]}, Start, End, Option).
 
-%% @equiv delete(ecron_local, Name)
+?DOC("""
+Same as [`delete(ecron_local, Name)`](`delete/2`).
+""").
 -spec delete(name()) -> ok.
 delete(JobName) -> delete(?LocalJob, JobName).
 
-%% @doc
-%% Deletes an existing job. If the job does not exist, it will be ignored.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to delete</li>
-%% </ul>
-%%
-%% Returns: `ok'
+?DOC("""
+Deletes an existing job. If the job does not exist, it will be ignored.
+
+Parameters:
+* `Register` - Process name where job is registered
+* `JobName` - Name of job to delete
+
+Returns: `ok`
+""").
 -spec delete(register(), name()) -> ok.
 delete(Register, JobName) ->
     ok = gen_server:call(Register, {delete, JobName}, infinity).
 
-%% @equiv deactivate(ecron_local, Name)
+?DOC("""
+Same as [`deactivate(ecron_local, Name)`](`deactivate/2`).
+""").
 -spec deactivate(name()) -> ok | {error, not_found}.
 deactivate(JobName) -> deactivate(?LocalJob, JobName).
 
-%% @doc
-%% Deactivates an existing job temporarily. The job can be reactivated using activate/2.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to deactivate</li>
-%% </ul>
-%%
-%% Returns: `ok' | `{error, not_found}'
+?DOC("""
+Deactivates an existing job temporarily. The job can be reactivated using activate/2.
+
+Parameters:
+* `Register` - Process name where job is registered  
+* `JobName` - Name of job to deactivate
+
+Returns: `ok` | `{error, not_found}`
+""").
 -spec deactivate(register(), name()) -> ok | {error, not_found}.
 deactivate(Register, JobName) ->
     case gen_server:call(Register, {deactivate, JobName}, infinity) of
@@ -292,20 +331,21 @@ deactivate(Register, JobName) ->
         {error, not_found} -> {error, not_found}
     end.
 
-%% @equiv activate(ecron_local, Name)
+?DOC("""
+Same as [`activate(ecron_local, Name)`](`activate/2`).
+""").
 -spec activate(name()) -> ok | {error, not_found}.
 activate(JobName) -> activate(?LocalJob, JobName).
 
-%% @doc
-%% Activates a previously deactivated job. The job will resume from the current time.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to activate</li>
-%% </ul>
-%%
-%% Returns: `ok' | `{error, not_found}'
+?DOC("""
+Activates a previously deactivated job. The job will resume from the current time.
+
+Parameters:
+* `Register` - Process name where job is registered
+* `JobName` - Name of job to activate
+
+Returns: `ok` | `{error, not_found}`
+""").
 -spec activate(register(), name()) -> ok | {error, not_found}.
 activate(Register, JobName) ->
     case gen_server:call(Register, {activate, JobName}, infinity) of
@@ -313,11 +353,12 @@ activate(Register, JobName) ->
         {error, not_found} -> {error, not_found}
     end.
 
-%% @doc
-%% Retrieves statistics for local registered jobs.
-%%
-%% Returns: List of statistics for all jobs in local registries.
-%% Each statistic entry contains the same information as statistic/2.
+?DOC("""
+Retrieves statistics for local registered jobs.
+
+Returns: List of statistics for all jobs in local registries.
+Each statistic entry contains the same information as `statistic/2`.
+""").
 -spec statistic(register() | name()) -> [statistic()].
 statistic(Register) ->
     case is_atom(Register) andalso undefined =/= erlang:whereis(Register) of
@@ -327,24 +368,22 @@ statistic(Register) ->
             ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register)
     end.
 
-%% @doc
-%% Retrieves statistics for a specific job.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to get statistics for</li>
-%% </ul>
-%%
-%% Returns: `{ok, statistic()}' | `{error, not_found}'
-%% Where statistic() contains:
-%% <ul>
-%%   <li>Job configuration</li>
-%%   <li>Execution counts (success/failure)</li>
-%%   <li>Latest results</li>
-%%   <li>Run times</li>
-%%   <li>Next scheduled runs</li>
-%% </ul>
+?DOC("""
+Retrieves statistics for a specific job.
+
+Parameters:
+* `Register` - Process name where job is registered
+* `JobName` - Name of job to get statistics for
+
+Returns: `{ok, statistic()}` | `{error, not_found}`
+
+Where statistic() contains:
+- Job configuration
+- Execution counts (success/failure)  
+- Latest results
+- Run times
+- Next scheduled runs
+""").
 -spec statistic(register(), name()) -> {ok, statistic()} | {error, not_found}.
 statistic(Register, JobName) ->
     case ets:lookup(Register, JobName) of
@@ -359,11 +398,12 @@ statistic(Register, JobName) ->
             end
     end.
 
-%% @doc
-%% Retrieves statistics for both local and global registered jobs.
-%%
-%% Returns: List of statistics for all jobs in both local and global registries.
-%% Each statistic entry contains the same information as statistic/2.
+?DOC("""
+Retrieves statistics for both local and global registered jobs.
+
+Returns: List of statistics for all jobs in both local and global registries.
+Each statistic entry contains the same information as statistic/2.
+""").
 -spec statistic() -> [statistic()].
 statistic() ->
     Local = ets:foldl(
@@ -380,34 +420,32 @@ statistic() ->
     is_list(Local) orelse throw({error, invalid_statistic, Local}),
     lists:append(Local, Global).
 
-%% @doc
-%% Reloads all tasks manually. Useful when system time has changed significantly.
-%%
-%% This will:
-%% <ul>
-%%   <li>Recalculate next execution times for all jobs</li>
-%%   <li>Reset internal timers</li>
-%%   <li>Apply to both local and global jobs</li>
-%% </ul>
-%%
-%% Returns: ok
+?DOC("""
+Reloads all tasks manually. Useful when system time has changed significantly.
+
+This will:
+- Recalculate next execution times for all jobs
+- Reset internal timers
+- Apply to both local and global jobs
+
+Returns: `ok`
+""").
 -spec reload() -> ok.
 reload() ->
     gen_server:cast(?LocalJob, reload),
     gen_server:cast({global, ?GlobalJob}, reload).
 
-%% @doc
-%% Parses a crontab specification and returns the next N trigger times.
-%% Useful for debugging and validating crontab expressions.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Spec' - Crontab expression to parse</li>
-%%   <li>`Num' - Number of future trigger times to calculate</li>
-%% </ul>
-%%
-%% Returns: `{ok, #{type => cron|every, crontab => parsed_spec, next => [rfc3339_string()]}}' |
-%%          `{error, parse_error(), term()}'
+?DOC("""
+Parses a crontab specification and returns the next N trigger times.
+Useful for debugging and validating crontab expressions.
+
+Parameters:
+* `Spec` - Crontab expression to parse
+* `Num` - Number of future trigger times to calculate
+
+Returns: `{ok, #{type => cron|every, crontab => parsed_spec, next => [rfc3339_string()]}}` |
+`{error, parse_error(), term()}`
+""").
 -spec parse_spec(crontab_spec(), pos_integer()) ->
     {ok, #{type => cron | every, crontab => crontab_spec(), next => [rfc3339_string()]}}
     | {error, atom(), term()}.
@@ -728,8 +766,15 @@ maybe_spawn_worker(true, false, Name, MFA, JobTab) ->
     {1, false};
 maybe_spawn_worker(true, Pid, Name, MFA, JobTab) when is_pid(Pid) ->
     case is_process_alive(Pid) of
-        true -> {0, Pid};
-        false -> {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA])}
+        true ->
+            error_logger:error_msg(
+                "Job ~p skipped - last execution is still running (pid:~p, fn:~p)."
+                " Use {singleton,false} for concurrent runs~n",
+                [Name, Pid, erlang:process_info(Pid, current_function)]
+            ),
+            {0, Pid};
+        false ->
+            {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA])}
     end;
 maybe_spawn_worker(false, Singleton, _Name, _MFA, _JobTab) ->
     {0, Singleton}.
