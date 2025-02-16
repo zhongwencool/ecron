@@ -350,6 +350,7 @@ parse_crontab([L | _], _Acc) ->
 parse_job(JobName, Spec, MFA, Start, End, Opts) ->
     case parse_start_end_time(Start, End) of
         {StartTime, EndTime} ->
+            io:format("1Start: ~p, End: ~p~n", [{Start, datetime(Start)}, {End, datetime(End)}]),
             case parse_spec(Spec) of
                 {ok, Type, Crontab} ->
                     Job = #{
@@ -393,6 +394,10 @@ parse_start_end_time(Start, End) ->
                 true -> {Start, {23, 59, 59}}
             end;
         _ ->
+            io:format("Start: ~p, End: ~p~n", [
+                {Start, datetime(Start)},
+                {End, datetime(End), datetime(Start) andalso datetime(End)}
+            ]),
             case datetime(Start) andalso datetime(End) of
                 true -> {Start, End};
                 false -> false
