@@ -30,6 +30,7 @@ and time-based message delivery.
 -export([delete/1, delete/2]).
 -export([deactivate/1, activate/1, deactivate/2, activate/2]).
 -export([statistic/0, statistic/1, statistic/2]).
+-export([predict_datetime/2, predict_datetime/4]).
 -export([reload/0]).
 -export([parse_spec/2]).
 
@@ -254,9 +255,10 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 <!-- tabs-close -->
 
 > #### TimeRange {: .info}
-> The maximum value in the spec must be between start and end times.
-> For example: With spec `0 1-12/1 * * *` the max value is 12, 
-> so start and end times must be between {0,0,0} and {12,0,0}, with start < end.
+> The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
+>
+> For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
+> so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
 """).
 -spec add_with_time(name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
@@ -293,9 +295,10 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 <!-- tabs-close -->
 
 > #### TimeRange {: .info}
-> The maximum value in the spec must be between start and end times.
-> For example: With spec `0 1-12/1 * * *` the max value is 12, 
-> so start and end times must be between {0,0,0} and {12,0,0}, with start < end.
+> The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
+>
+> For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
+> so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
 """).
 -spec add_with_time(register(), name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
@@ -366,7 +369,7 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
             case ecron_spec:parse_spec(Spec) of
                 {ok, Type, Crontab} ->
                     case ecron_spec:valid_time(Type, StartTime, EndTime, Crontab) of
-                        true ->
+                        ok ->
                             Job = #{
                                 type => Type,
                                 name => JobName,
@@ -380,14 +383,16 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
                                 {ok, Name} -> {ok, Name};
                                 {error, already_exist} -> {error, already_exist}
                             end;
-                        false ->
-                            {error, invalid_time, {Start, End, Spec}}
+                        {error, Reason} ->
+                            {error, invalid_time, #{
+                                start => Start, stop => End, spec => Spec, reason => Reason
+                            }}
                     end;
                 ErrParse ->
                     ErrParse
             end;
         false ->
-            {error, invalid_time, {Start, End, Spec}}
+            {error, invalid_time, #{start => Start, stop => End, spec => Spec}}
     end.
 
 ?DOC("""
@@ -428,7 +433,9 @@ send_after(Spec, Pid, Message) ->
         {ok, Type, JobSpec} ->
             TimeZone = get_time_zone(),
             Now = current_millisecond(),
-            Next = next_schedule_millisecond(Type, JobSpec, TimeZone, Now, {0, 0, 0}, {23, 59, 59}),
+            {ok, Next} = next_schedule_millisecond(
+                Type, JobSpec, TimeZone, Now, {0, 0, 0}, {23, 59, 59}, Now
+            ),
             {ok, erlang:send_after(Next - Now, Pid, Message)};
         {error, _Field, _Value} = Error ->
             Error
@@ -659,7 +666,7 @@ parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
 
 parse_spec2({ok, Type, JobSpec}, Num) ->
     Job = #{type => Type, crontab => JobSpec},
-    Next = predict_datetime(Job, Num),
+    {ok, Next} = predict_datetime(Job, Num),
     {ok, Job#{next => Next}};
 parse_spec2({error, _Field, _Value} = Error, _Num) ->
     Error.
@@ -669,10 +676,15 @@ get_next_schedule_time(Name) -> gen_server:call(?LocalJob, {next_schedule_time, 
 ?DOC(false).
 clear() -> gen_server:call(?LocalJob, clear, infinity).
 
+?DOC(false).
 predict_datetime(Job, Num) ->
+    predict_datetime(Job, Num, {0, 0, 0}, {23, 59, 59}).
+
+?DOC(false).
+predict_datetime(Job, Num, Start, End) ->
     TZ = get_time_zone(),
     Now = current_millisecond(),
-    predict_datetime(activate, Job, {0, 0, 0}, {23, 59, 59}, Num, TZ, Now).
+    predict_datetime(activate, Job, Start, End, Num, TZ, Now).
 
 %%%===================================================================
 %%% CallBack
@@ -837,7 +849,7 @@ update_timer(Now, InitTimer, Job, TimeTab, TimeZone) ->
         start_time := Start,
         end_time := End
     } = Job,
-    NextSec = next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End),
+    {ok, NextSec} = next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End, Now),
     Timer = InitTimer#timer{
         key = {NextSec, Name},
         type = Type,
@@ -848,11 +860,11 @@ update_timer(Now, InitTimer, Job, TimeTab, TimeZone) ->
     ets:insert(TimeTab, Timer),
     {ok, Name}.
 
-next_schedule_millisecond(every, Sec, TimeZone, Now, Start, End) ->
+next_schedule_millisecond(every, Sec, TimeZone, Now, Start, End, InitMs) ->
     Next = Now + Sec * 1000,
     case Start =:= {0, 0, 0} andalso End =:= {23, 59, 59} of
         true ->
-            Next;
+            {ok, Next};
         false ->
             {_, {NowHour, NowMin, NowSec}} = millisecond_to_datetime(TimeZone, Next),
             {StartHour, StartMin, StartSec} = Start,
@@ -861,11 +873,11 @@ next_schedule_millisecond(every, Sec, TimeZone, Now, Start, End) ->
             StartTime = StartHour * 3600 + StartMin * 60 + StartSec,
             EndTime = EndHour * 3600 + EndMin * 60 + EndSec,
             case NowTime >= StartTime andalso NowTime =< EndTime of
-                true -> Next;
-                false -> next_schedule_millisecond(every, Sec, TimeZone, Next, Start, End)
+                true -> {ok, Next};
+                false -> next_schedule_millisecond(every, Sec, TimeZone, Next, Start, End, InitMs)
             end
     end;
-next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End) ->
+next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End, InitMs) ->
     ForwardDateTime = millisecond_to_datetime(TimeZone, Now + 1000),
     DefaultMin = #{
         second => 0,
@@ -876,23 +888,26 @@ next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End) ->
         day_of_week => 0
     },
     MinSpec = spec_min(maps:to_list(Spec), DefaultMin),
-    next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone).
+    next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone, InitMs).
 
-next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone) ->
+next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone, InitMs) ->
     NextDateTime =
         {_, {NH, NM, NS}} =
         next_schedule_datetime(Spec, MinSpec, ForwardDateTime, Start, End),
     Next = NH * 3600 + NM * 60 + NS,
     {SHour, SMin, SSec} = Start,
     {EHour, EMin, ESec} = End,
+    NextMs = datetime_to_millisecond(TimeZone, NextDateTime),
     case
         Next >= SHour * 3600 + SMin * 60 + SSec andalso
             Next =< EHour * 3600 + EMin * 60 + ESec
     of
         true ->
-            datetime_to_millisecond(TimeZone, NextDateTime);
+            {ok, NextMs};
+        false when NextMs - InitMs =< 5 * 365 * 24 * 3600 * 1000 ->
+            next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone, InitMs);
         false ->
-            next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone)
+            {error, "can't find next schedule time in next 5 years"}
     end.
 
 next_schedule_datetime(DateSpec, Min, DateTime, Start, End) ->
@@ -999,7 +1014,7 @@ update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid, Tab, JobTab) ->
     delete_job(JobTab, Tab, Name);
 update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid, Tab, _JobTab) ->
     #timer{type = Type, start_at = Start, end_at = End, spec = Spec} = Cron,
-    Next = next_schedule_millisecond(Type, Spec, TZ, Cur, Start, End),
+    {ok, Next} = next_schedule_millisecond(Type, Spec, TZ, Cur, Start, End, Cur),
     NextTimer = Cron#timer{key = {Next, Name}, singleton = CurPid, cur_count = Count},
     ets:insert(Tab, NextTimer).
 
@@ -1190,7 +1205,7 @@ next_timeout(#state{timer_tab = TimerTab, max_timeout = MaxTimeout} = State) ->
 to_rfc3339(Next) -> calendar:system_time_to_rfc3339(Next div 1000, [{unit, second}]).
 
 predict_datetime(deactivate, _, _, _, _, _, _) ->
-    [];
+    {ok, []};
 predict_datetime(activate, #{type := every, crontab := Sec} = Job, Start, End, Num, TimeZone, NowT) ->
     Now =
         case maps:find(name, Job) of
@@ -1202,12 +1217,16 @@ predict_datetime(activate, Job, Start, End, Num, TimeZone, Now) ->
     predict_datetime2(Job, TimeZone, Now, Start, End, Num, []).
 
 predict_datetime2(_Job, _TimeZone, _Now, _Start, _End, 0, Acc) ->
-    lists:reverse(Acc);
+    {ok, lists:reverse(Acc)};
 predict_datetime2(Job, TimeZone, Now, Start, End, Num, Acc) ->
     #{type := Type, crontab := Spec} = Job,
-    Next = next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End),
-    NewAcc = [to_rfc3339(Next) | Acc],
-    predict_datetime2(Job, TimeZone, Next, Start, End, Num - 1, NewAcc).
+    case next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End, Now) of
+        {ok, Next} ->
+            NewAcc = [to_rfc3339(Next) | Acc],
+            predict_datetime2(Job, TimeZone, Next, Start, End, Num - 1, NewAcc);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 get_next_schedule_time(Timer, Name) ->
     %% P = ets:fun2ms(fun(#timer{name = N, key = {Time, _}}) when N =:= Name -> Time end),
@@ -1264,12 +1283,13 @@ job_to_statistic(Job, TimeZone, Now) ->
         run_microsecond = RunMs
     } = Job,
     #{start_time := StartTime, end_time := EndTime} = JobSpec,
+    {ok, Predict} = predict_datetime(Status, JobSpec, StartTime, EndTime, ?MAX_SIZE, TimeZone, Now),
     JobSpec#{
         status => Status,
         ok => Ok,
         failed => Failed,
         opts => Opts,
-        next => predict_datetime(Status, JobSpec, StartTime, EndTime, ?MAX_SIZE, TimeZone, Now),
+        next => Predict,
         start_time => StartTime,
         end_time => EndTime,
         node => node(),

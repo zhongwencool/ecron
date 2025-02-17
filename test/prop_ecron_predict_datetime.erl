@@ -30,7 +30,7 @@ prop_predict_cron_datetime() ->
                     start_time => Start,
                     end_time => End
                 },
-                List = ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now),
+                {ok, List} = ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now),
                 NowDateTime = calendar:system_time_to_local_time(Now, millisecond),
                 ExpectList = predict_cron_datetime(
                     Start, End, NewCrontabSpec, {local, NowDateTime}, 500, []
@@ -66,7 +66,7 @@ prop_predict_every_datetime() ->
                 start_time => Start,
                 end_time => End
             },
-            List = ecron:predict_datetime(activate, NewSpec, Start, End, 10, utc, Now),
+            {ok, List} = ecron:predict_datetime(activate, NewSpec, Start, End, 10, utc, Now),
             ?WHENFAIL(
                 io:format("Predict Failed: ~p ~p~n", [NewSpec, List]),
                 prop_ecron:check_every_result(Second, Start, End, utc, List)

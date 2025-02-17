@@ -261,7 +261,7 @@ check_add_with_limit([_Spec, _MFA | _], {ok, _Name}) ->
 check_add_with_limit([Spec, _MFA, {StartTime, EndTime}], {error, invalid_time, _}) ->
     not is_valid_time(Spec, StartTime, EndTime).
 
-is_valid_time(Spec, {SH, SM, SS}, {EH, EM, ES}) ->
+is_valid_time(Spec, {SH, SM, SS} = StartTime, {EH, EM, ES} = EndTime) ->
     Start = SH * 3600 + SM * 60 + SS,
     End = EH * 3600 + EM * 60 + ES,
     case End > Start of
@@ -271,11 +271,27 @@ is_valid_time(Spec, {SH, SM, SS}, {EH, EM, ES}) ->
             case ecron_spec:parse_spec(Spec) of
                 {ok, cron, Job} ->
                     #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = Job,
-                    Hour = parse_max(23, HourSpec),
-                    Minute = parse_max(59, MinuteSpec),
-                    Second = parse_max(59, SecondSpec),
-                    SpecTime = Hour * 3600 + Minute * 60 + Second,
-                    SpecTime >= Start andalso SpecTime =< End;
+                    MaxHour = parse_max(23, HourSpec),
+                    MaxMinute = parse_max(59, MinuteSpec),
+                    MaxSecond = parse_max(59, SecondSpec),
+                    MaxSpecTime = MaxHour * 3600 + MaxMinute * 60 + MaxSecond,
+                    MinHour = parse_min(0, HourSpec),
+                    MinMinute = parse_min(0, MinuteSpec),
+                    MinSecond = parse_min(0, SecondSpec),
+                    MinSpecTime = MinHour * 3600 + MinMinute * 60 + MinSecond,
+                    case MaxSpecTime >= Start andalso MinSpecTime =< End of
+                        false ->
+                            false;
+                        true ->
+                            case
+                                ecron:predict_datetime(
+                                    #{type => cron, crontab => Job}, 1, StartTime, EndTime
+                                )
+                            of
+                                {ok, [_]} -> true;
+                                _ -> false
+                            end
+                    end;
                 _ ->
                     true
             end
@@ -288,6 +304,10 @@ parse_max(_DefaultMax, List) ->
         {_, Max} -> Max;
         Max -> Max
     end.
+
+parse_min(Min, '*') -> Min;
+parse_min(_DefaultMin, [{Min, _} | _]) -> Min;
+parse_min(_DefaultMin, [Min | _]) -> Min.
 
 add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
 add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).

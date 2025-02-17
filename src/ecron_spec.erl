@@ -10,24 +10,43 @@
 -export([parse_valid_opts/1]).
 -export([valid_time/4]).
 
-%% @private
-
-valid_time(cron, {SH, SM, SS}, {EH, EM, ES}, CronTab) ->
+valid_time(cron, {SH, SM, SS} = StartTime, {EH, EM, ES} = EndTime, CronTab) ->
     Start = SH * 3600 + SM * 60 + SS,
     End = EH * 3600 + EM * 60 + ES,
     case End > Start of
         false ->
-            false;
+            {error, "Start time must be less than the maximum value in the spec"};
         true ->
             #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = CronTab,
-            Hour = parse_max(23, HourSpec),
-            Minute = parse_max(59, MinuteSpec),
-            Second = parse_max(59, SecondSpec),
-            Spec = Hour * 3600 + Minute * 60 + Second,
-            Spec >= Start andalso Spec =< End
+            MaxHour = parse_max(23, HourSpec),
+            MaxMinute = parse_max(59, MinuteSpec),
+            MaxSecond = parse_max(59, SecondSpec),
+            MaxSpec = MaxHour * 3600 + MaxMinute * 60 + MaxSecond,
+            case MaxSpec >= Start of
+                true ->
+                    MinHour = parse_min(0, HourSpec),
+                    MinMinute = parse_min(0, MinuteSpec),
+                    MinSecond = parse_min(0, SecondSpec),
+                    MinSpec = MinHour * 3600 + MinMinute * 60 + MinSecond,
+                    case MinSpec =< End of
+                        true ->
+                            Job = #{type => cron, crontab => CronTab},
+                            case ecron:predict_datetime(Job, 1, StartTime, EndTime) of
+                                {ok, [_]} -> ok;
+                                Error -> Error
+                            end;
+                        false ->
+                            {error, "End time must be greater than the minimum value in the spec"}
+                    end;
+                false ->
+                    {error, "Start time must be less than the maximum value in the spec"}
+            end
     end;
 valid_time(every, {SH, SM, SS}, {EH, EM, ES}, _CronTab) ->
-    ((EH - SH) * 3600 + (EM - SM) * 60 + (ES - SS)) >= 0.
+    case ((EH - SH) * 3600 + (EM - SM) * 60 + (ES - SS)) >= 0 of
+        true -> ok;
+        false -> {error, "End time must be greater than the start time"}
+    end.
 
 parse_max(Max, '*') ->
     Max;
@@ -37,7 +56,10 @@ parse_max(_DefaultMax, List) ->
         Max -> Max
     end.
 
-% Run once a year, midnight, Jan. 1st
+parse_min(Min, '*') -> Min;
+parse_min(_DefaultMin, [{Min, _} | _]) -> Min;
+parse_min(_DefaultMin, [Min | _]) -> Min.
+
 parse_spec("@yearly") ->
     parse_spec("0 0 0 1 1 *");
 % Same as @yearly
@@ -350,7 +372,6 @@ parse_crontab([L | _], _Acc) ->
 parse_job(JobName, Spec, MFA, Start, End, Opts) ->
     case parse_start_end_time(Start, End) of
         {StartTime, EndTime} ->
-            io:format("1Start: ~p, End: ~p~n", [{Start, datetime(Start)}, {End, datetime(End)}]),
             case parse_spec(Spec) of
                 {ok, Type, Crontab} ->
                     Job = #{
@@ -394,10 +415,6 @@ parse_start_end_time(Start, End) ->
                 true -> {Start, {23, 59, 59}}
             end;
         _ ->
-            io:format("Start: ~p, End: ~p~n", [
-                {Start, datetime(Start)},
-                {End, datetime(End), datetime(Start) andalso datetime(End)}
-            ]),
             case datetime(Start) andalso datetime(End) of
                 true -> {Start, End};
                 false -> false
