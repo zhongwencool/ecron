@@ -382,12 +382,17 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
                         start_time => StartTime,
                         end_time => EndTime
                     },
-                    {ok, #job{
-                        name = JobName,
-                        status = activate,
-                        job = Job,
-                        opts = parse_valid_opts(Opts)
-                    }};
+                    case parse_valid_opts(Opts) of
+                        {ok, ValidOpts} ->
+                            {ok, #job{
+                                name = JobName,
+                                status = activate,
+                                job = Job,
+                                opts = ValidOpts
+                            }};
+                        ErrOpts ->
+                            ErrOpts
+                    end;
                 ErrParse ->
                     ErrParse
             end;
@@ -398,7 +403,21 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
 parse_valid_opts(Opts) ->
     Singleton = proplists:get_value(singleton, Opts, true),
     MaxCount = proplists:get_value(max_count, Opts, unlimited),
-    [{singleton, Singleton}, {max_count, MaxCount}].
+    MaxRuntimeMs = proplists:get_value(max_runtime_ms, Opts, unlimited),
+    case
+        is_boolean(Singleton) andalso
+            (is_integer(MaxCount) orelse MaxCount =:= unlimited) andalso
+            (is_integer(MaxRuntimeMs) orelse MaxRuntimeMs =:= unlimited)
+    of
+        true ->
+            {ok, [
+                {singleton, Singleton},
+                {max_count, MaxCount},
+                {max_runtime_ms, MaxRuntimeMs}
+            ]};
+        false ->
+            {error, invalid_opts, Opts}
+    end.
 
 parse_start_end_time(Start, End) ->
     case {Start, End} of

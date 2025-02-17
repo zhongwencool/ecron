@@ -36,7 +36,7 @@ and time-based message delivery.
 
 %% Callback Function
 -export([start_link/2, handle_call/3, handle_info/2, init/1, handle_cast/2]).
--export([spawn_mfa/3, clear/0]).
+-export([spawn_mfa/3, spawn_mfa/4, clear/0]).
 
 -record(state, {time_zone, max_timeout, timer_tab, job_tab}).
 -record(timer, {
@@ -50,7 +50,8 @@ and time-based message delivery.
     link,
     start_at = {0, 0, 0},
     end_at = {23, 59, 59},
-    max_count = unlimited
+    max_count = unlimited,
+    max_runtime_ms = unlimited
 }).
 
 -define(MAX_SIZE, 16).
@@ -102,11 +103,23 @@ and time-based message delivery.
 }.
 
 -type parse_error() ::
-    invalid_time | invalid_spec | month | day_of_month | day_of_week | hour | minute | second.
+    invalid_time
+    | invalid_opts
+    | invalid_spec
+    | month
+    | day_of_month
+    | day_of_week
+    | hour
+    | minute
+    | second.
 
 -type start_at() :: unlimited | calendar:time().
 -type end_at() :: unlimited | calendar:time().
--type options() :: [{singleton, boolean()} | {max_count, pos_integer() | unlimited}].
+-type options() :: [
+    {singleton, boolean()}
+    | {max_count, pos_integer() | unlimited}
+    | {max_runtime_ms, pos_integer() | unlimited}
+].
 -type ecron_result() :: {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 
 ?DOC("""
@@ -350,6 +363,7 @@ Parameters:
 * `Opts` - Options list:
     * `{singleton, boolean()}` - If true (default), prevents concurrent execution
     * `{max_count, pos_integer() | unlimited}` - Maximum executions allowed
+    * `{max_runtime_ms, pos_integer() | unlimited}` - Maximum runtime milliseconds allowed for each execution
 
 Returns: `{ok, JobName}` | `{error, already_exist}` | `{error, parse_error(), term()}`
 
@@ -400,10 +414,16 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
                                 start_time => StartTime,
                                 end_time => EndTime
                             },
-                            ValidOpts = ecron_spec:parse_valid_opts(Opts),
-                            case gen_server:call(Register, {add, Job, ValidOpts}, infinity) of
-                                {ok, Name} -> {ok, Name};
-                                {error, already_exist} -> {error, already_exist}
+                            case ecron_spec:parse_valid_opts(Opts) of
+                                {ok, ValidOpts} ->
+                                    case
+                                        gen_server:call(Register, {add, Job, ValidOpts}, infinity)
+                                    of
+                                        {ok, Name} -> {ok, Name};
+                                        {error, already_exist} -> {error, already_exist}
+                                    end;
+                                ErrOpts ->
+                                    ErrOpts
                             end;
                         {error, Reason} ->
                             {error, invalid_time, #{
@@ -818,6 +838,7 @@ add_job(JobTab, TimerTab, Job, TimeZone, Opts, ForceUpdate) ->
             InitTimer = #timer{
                 singleton = proplists:get_value(singleton, Opts),
                 max_count = proplists:get_value(max_count, Opts),
+                max_runtime_ms = proplists:get_value(max_runtime_ms, Opts),
                 name = Name,
                 mfa = MFA,
                 link = PidOrUndef
@@ -1004,20 +1025,28 @@ tick_tick({Due, _Name}, Cur, #state{max_timeout = MaxTimeout}) when Due > Cur ->
 tick_tick(Key = {Due, Name}, Cur, State) ->
     #state{time_zone = TZ, timer_tab = TimerTab, job_tab = JobTab} = State,
     [Cron] = ets:lookup(TimerTab, Key),
-    #timer{singleton = Singleton, mfa = MFA, max_count = MaxCount, cur_count = CurCount} = Cron,
+    #timer{
+        singleton = Singleton,
+        mfa = MFA,
+        max_runtime_ms = MaxRuntimeMs,
+        max_count = MaxCount,
+        cur_count = CurCount
+    } = Cron,
     ets:delete(TimerTab, Key),
-    {Incr, CurPid} = maybe_spawn_worker(Cur - Due < 1000, Singleton, Name, MFA, JobTab),
+    {Incr, CurPid} = maybe_spawn_worker(
+        Cur - Due < 1000, Singleton, Name, MFA, MaxRuntimeMs, JobTab
+    ),
     update_next_schedule(CurCount + Incr, MaxCount, Cron, Cur, Name, TZ, CurPid, TimerTab, JobTab),
     tick(State).
 
-maybe_spawn_worker(true, _, Name, {erlang, send, Args}, JobTab) ->
-    {1, spawn_mfa(JobTab, Name, {erlang, send, Args})};
-maybe_spawn_worker(true, true, Name, MFA, JobTab) ->
-    {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA])};
-maybe_spawn_worker(true, false, Name, MFA, JobTab) ->
-    spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA]),
+maybe_spawn_worker(true, _, Name, {erlang, send, Args}, MaxRuntimeMs, JobTab) ->
+    {1, spawn_mfa(JobTab, Name, {erlang, send, Args}, MaxRuntimeMs)};
+maybe_spawn_worker(true, true, Name, MFA, MaxRuntimeMs, JobTab) ->
+    {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs])};
+maybe_spawn_worker(true, false, Name, MFA, MaxRuntimeMs, JobTab) ->
+    spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs]),
     {1, false};
-maybe_spawn_worker(true, Pid, Name, MFA, JobTab) when is_pid(Pid) ->
+maybe_spawn_worker(true, Pid, Name, MFA, MaxRuntimeMs, JobTab) when is_pid(Pid) ->
     case is_process_alive(Pid) of
         true ->
             error_logger:error_msg(
@@ -1027,9 +1056,9 @@ maybe_spawn_worker(true, Pid, Name, MFA, JobTab) when is_pid(Pid) ->
             ),
             {0, Pid};
         false ->
-            {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA])}
+            {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs])}
     end;
-maybe_spawn_worker(false, Singleton, _Name, _MFA, _JobTab) ->
+maybe_spawn_worker(false, Singleton, _Name, _MFA, _MaxRuntimeMs, _JobTab) ->
     {0, Singleton}.
 
 update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid, Tab, JobTab) ->
@@ -1041,6 +1070,28 @@ update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid, Tab, _JobTab) ->
     ets:insert(Tab, NextTimer).
 
 ?DOC(false).
+spawn_mfa(JobTab, Name, MFA, unlimited) ->
+    spawn_mfa(JobTab, Name, MFA);
+spawn_mfa(JobTab, Name, MFA, MaxRuntimeMs) ->
+    {Pid, Ref} = spawn_monitor(?MODULE, spawn_mfa, [JobTab, Name, MFA]),
+    receive
+        {'DOWN', Ref, process, Pid, _Reason} ->
+            ok
+    after MaxRuntimeMs ->
+        case ets:lookup(JobTab, Name) of
+            [] ->
+                ok;
+            [Job] ->
+                #job{failed = Failed, aborted = Aborted} = Job,
+                Elements = [
+                    {#job.failed, Failed + 1},
+                    {#job.aborted, Aborted + 1}
+                ],
+                ets:update_element(JobTab, Name, Elements)
+        end,
+        exit(Pid, kill)
+    end.
+
 spawn_mfa(JobTab, Name, MFA) ->
     Start = erlang:monotonic_time(),
     {Event, OkInc, FailedInc, NewRes} =
@@ -1301,6 +1352,7 @@ job_to_statistic(Job, TimeZone, Now) ->
         opts = Opts,
         ok = Ok,
         failed = Failed,
+        aborted = Aborted,
         result = Res,
         run_microsecond = RunMs
     } = Job,
@@ -1310,6 +1362,7 @@ job_to_statistic(Job, TimeZone, Now) ->
         status => Status,
         ok => Ok,
         failed => Failed,
+        aborted => Aborted,
         opts => Opts,
         next => Predict,
         start_time => StartTime,
@@ -1334,6 +1387,7 @@ day_of_week(Y, M, D) ->
 
 maybe_spawn_woker_test() ->
     ?assertEqual(
-        {0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)
+        {0, self()},
+        maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, 1000, job_tab)
     ).
 -endif.

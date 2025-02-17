@@ -20,6 +20,7 @@
     opts = [],
     ok = 0,
     failed = 0,
+    aborted = 0,
     link = undefined,
     result = [],
     run_microsecond = []

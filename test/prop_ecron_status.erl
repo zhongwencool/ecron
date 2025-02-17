@@ -233,6 +233,19 @@ prop_ecron_send_interval() ->
                         true = erlang:register(Name, Pid),
                         Name
                 end,
+            {error, invalid_opts, [
+                {max_count, test}
+            ]} = ecron:send_interval(
+                ecron_local,
+                bad_max_count,
+                "* * * * * *",
+                {add, self(), Message},
+                unlimited,
+                unlimited,
+                [
+                    {max_count, test}
+                ]
+            ),
             {ok, Job} = ecron:send_interval("* * * * * *", Target, {add, self(), Message}),
             Res1 =
                 receive
