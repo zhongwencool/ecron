@@ -260,6 +260,17 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
+If we can't find the next schedule time in next 5 years, return 'can't find next schedule time in next 5 years'.
+
+```erlang
+ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
+{error,invalid_time,
+       #{reason => "can't find next schedule time in next 5 years",
+         start => {1,0,0},
+         stop => {12,0,0},
+         spec => "* 0,13 * * *"}}
+```
+
 """).
 -spec add_with_time(name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
@@ -299,6 +310,17 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 >
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
+
+If we can't find the next schedule time in next 5 years, return 'can't find next schedule time in next 5 years'.
+
+```erlang
+ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
+{error,invalid_time,
+       #{reason => "can't find next schedule time in next 5 years",
+         start => {1,0,0},
+         stop => {12,0,0},
+         spec => "* 0,13 * * *"}}
+```
 
 """).
 -spec add_with_time(register(), name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
