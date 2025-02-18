@@ -160,7 +160,11 @@ prop_maybe_error_spec() ->
                     );
                 {error, Field, Reason} ->
                     ?WHENFAIL(
-                        io:format("Parse ~s Failed: ~p\n  ~p\n", [SpecStr, Expect, {Field, Reason}]),
+                        io:format("Parse ~s Failed: ~p\n  ~p\n", [
+                            SpecStr,
+                            Expect,
+                            {Field, Reason}
+                        ]),
                         check_failed_field(Field, prop_ecron:unzip(maps:get(Field, Expect)))
                     )
             end

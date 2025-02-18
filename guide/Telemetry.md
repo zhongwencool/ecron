@@ -1,3 +1,5 @@
+## Telemetry
+
  Ecron uses [Telemetry](https://github.com/beam-telemetry/telemetry) for instrumentation and for having an extensible way of doing logging. 
  Telemetry is a metrics and instrumentation library for Erlang and Elixir applications 
  that is based on publishing events through a common interface and attaching handlers to handle those events. 

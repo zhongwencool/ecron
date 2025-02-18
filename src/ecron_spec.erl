@@ -401,7 +401,7 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
     end.
 
 parse_valid_opts(Opts) ->
-    Singleton = proplists:get_value(singleton, Opts, true),
+    Singleton = proplists:get_value(singleton, Opts, false),
     MaxCount = proplists:get_value(max_count, Opts, unlimited),
     MaxRuntimeMs = proplists:get_value(max_runtime_ms, Opts, unlimited),
     case

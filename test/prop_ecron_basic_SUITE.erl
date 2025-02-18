@@ -38,7 +38,7 @@ init_per_testcase(_TestCase, Config) ->
 basic(_Config) ->
     JobName = check_mail,
     MFA = {io, format, ["Mail checking~n"]},
-    {ok, JobName} = ecron:add(?NAME, JobName, "0 0 8 * * 1-5", MFA, unlimited, unlimited, []),
+    {ok, JobName} = ecron:create(JobName, "0 0 8 * * 1-5", MFA, #{register => ?NAME}),
     {ok, Result} = ecron:statistic(?NAME, JobName),
     [Result1] = ecron:statistic(?NAME),
     [] = ecron:statistic(ecron_not_found),
@@ -58,7 +58,7 @@ basic(_Config) ->
         mfa := MFA,
         name := check_mail,
         next := Next,
-        opts := [{singleton, true}, {max_count, unlimited}, {max_runtime_ms, unlimited}],
+        opts := [{singleton, false}, {max_count, unlimited}, {max_runtime_ms, unlimited}],
         start_time := {0, 0, 0},
         status := activate,
         type := cron
@@ -73,33 +73,41 @@ basic(_Config) ->
 error_start_end_time(_Config) ->
     JobName = check_mail_with_time,
     MFA = {io, format, ["Mail checking~n"]},
-    {error, invalid_time, _} = ecron:add_with_time(
-        JobName, "0 0 8 * * 1-5", MFA, {12, 0, 0}, {11, 0, 0}
+    {error, invalid_time, _} = ecron:create(
+        JobName, "0 0 8 * * 1-5", MFA, #{start_time => {12, 0, 0}, end_time => {11, 0, 0}}
     ),
-    {error, invalid_time, _} = ecron:add_with_time(
-        JobName, "0 10 8,9 * * 1-5", MFA, {9, 20, 0}, {12, 0, 0}
+    {error, invalid_time, _} = ecron:create(
+        JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => {9, 20, 0}, end_time => {12, 0, 0}}
     ),
-    {error, invalid_time, _} = ecron:add_with_time(
-        JobName, "0 10 8,9 * * 1-5", MFA, {109, 20, 0}, {12, 0, 0}
+    {error, invalid_time, _} = ecron:create(
+        JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => {109, 20, 0}, end_time => {12, 0, 0}}
     ),
-    {error, invalid_time, _} = ecron:add_with_time(
-        JobName, "0 10 8,9 * * 1-5", MFA, {9, 20, 0}, 12
+    {error, invalid_time, _} = ecron:create(
+        JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => {9, 20, 0}, end_time => 12}
     ),
-    {error, invalid_time, _} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, unlimited, 1),
-    {ok, JobName} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, unlimited, unlimited),
+    {error, invalid_time, _} = ecron:create(
+        JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => unlimited, end_time => 12}
+    ),
+    {ok, JobName} = ecron:create(
+        JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => {8, 0, 0}, end_time => unlimited}
+    ),
     ok = ecron:delete(JobName),
-    {ok, JobName} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, {8, 0, 0}, unlimited),
+    {ok, JobName} = ecron:create(JobName, "0 10 8,9 * * 1-5", MFA, #{
+        start_time => {8, 0, 0}, end_time => {10, 0, 0}
+    }),
     ok = ecron:delete(JobName),
-    {ok, JobName} = ecron:add_with_time(JobName, "0 10 8,9 * * 1-5", MFA, unlimited, {10, 0, 0}),
+    {ok, JobName} = ecron:create(JobName, "0 10 8,9 * * 1-5", MFA, #{
+        start_time => unlimited, end_time => {10, 0, 0}
+    }),
     ok = ecron:delete(JobName),
     ok.
 
 max_runtime_ms_aborted(_Config) ->
     JobName = check_mail_with_max_runtime_ms,
     MFA = {?MODULE, mail_delay, [200]},
-    {ok, JobName} = ecron:add(?NAME, JobName, "@every 1s", MFA, unlimited, unlimited, [
-        {max_runtime_ms, 100}
-    ]),
+    {ok, JobName} = ecron:create(JobName, "@every 1s", MFA, #{
+        max_runtime_ms => 100, register => ?NAME
+    }),
     {ok, Result} = ecron:statistic(?NAME, JobName),
     ?assertMatch(
         #{
@@ -107,7 +115,7 @@ max_runtime_ms_aborted(_Config) ->
             mfa := MFA,
             name := JobName,
             next := _,
-            opts := [{singleton, true}, {max_count, unlimited}, {max_runtime_ms, 100}],
+            opts := [{singleton, false}, {max_count, unlimited}, {max_runtime_ms, 100}],
             start_time := {0, 0, 0},
             end_time := {23, 59, 59},
             status := activate,
@@ -136,9 +144,9 @@ mail_delay(Delay) ->
 max_runtime_ms_unlimited(_Config) ->
     UnlimitedJob = check_mail_with_unlimited_runtime_ms,
     MFA = {?MODULE, mail_delay, [200]},
-    {ok, UnlimitedJob} = ecron:add(?NAME, UnlimitedJob, "@every 1s", MFA, unlimited, unlimited, [
-        {max_runtime_ms, unlimited}
-    ]),
+    {ok, UnlimitedJob} = ecron:create(UnlimitedJob, "@every 1s", MFA, #{
+        max_runtime_ms => unlimited, register => ?NAME
+    }),
     {ok, Result} = ecron:statistic(?NAME, UnlimitedJob),
     ?assertMatch(
         #{
@@ -146,7 +154,7 @@ max_runtime_ms_unlimited(_Config) ->
             mfa := MFA,
             name := UnlimitedJob,
             next := _,
-            opts := [{singleton, true}, {max_count, unlimited}, {max_runtime_ms, unlimited}],
+            opts := [{singleton, false}, {max_count, unlimited}, {max_runtime_ms, unlimited}],
             start_time := {0, 0, 0},
             end_time := {23, 59, 59},
             status := activate,
@@ -166,9 +174,12 @@ max_runtime_ms_unlimited(_Config) ->
     ),
     ok = ecron:delete(?NAME, UnlimitedJob),
     Job300 = check_mail_with_300_runtime_ms,
-    {ok, Job300} = ecron:add(?NAME, Job300, "@every 1s", MFA, unlimited, unlimited, [
-        {max_runtime_ms, 300}
-    ]),
+    {ok, Job300} = ecron:create(
+        Job300,
+        "@every 1s",
+        MFA,
+        #{max_runtime_ms => 300, register => ?NAME}
+    ),
     timer:sleep(1250),
     {ok, Result3} = ecron:statistic(?NAME, Job300),
     ?assertMatch(
