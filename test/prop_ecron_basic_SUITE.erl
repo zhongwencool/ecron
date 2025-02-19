@@ -1,12 +1,9 @@
 -module(prop_ecron_basic_SUITE).
--include_lib("ecron/include/ecron.hrl").
 
-%%% Common Test includes
--include_lib("common_test/include/ct.hrl").
 -include_lib("stdlib/include/assert.hrl").
 
 -export([all/0, suite/0, groups/0, init_per_suite/1, end_per_suite/1, mail_delay/1]).
--compile(export_all).
+-export([basic/1, error_start_end_time/1, max_runtime_ms_aborted/1, max_runtime_ms_unlimited/1]).
 
 -define(NAME, ?MODULE).
 

@@ -12,7 +12,7 @@ and time-based message delivery.
 -export([start_link/1, start_link/2]).
 -export([create/3, create/4]).
 -export([send_after/3]).
--export([send_interval/2, send_interval/4]).
+-export([send_interval/2, send_interval/3, send_interval/4]).
 -export([delete/1, delete/2]).
 -export([deactivate/1, activate/1, deactivate/2, activate/2]).
 -export([statistic/0, statistic/1, statistic/2]).
@@ -28,7 +28,7 @@ and time-based message delivery.
 -export([add/3, add/4, add/6, add/7]).
 -export([add_with_time/5, add_with_time/6]).
 -export([add_with_count/3, add_with_count/5]).
--export([send_interval/3, send_interval/5, send_interval/7, send_interval/8]).
+-export([send_interval/5, send_interval/7, send_interval/8]).
 -deprecated([
     {add, 3, "use create/3 instead"},
     {add, 4, "use create/4 instead"},
@@ -38,7 +38,6 @@ and time-based message delivery.
     {add_with_time, 6, "use create/4 instead"},
     {add_with_count, 3, "use create/4 instead"},
     {add_with_count, 5, "use create/4 instead"},
-    {send_interval, 3, "use send_interval/4 instead"},
     {send_interval, 5, "use send_interval/4 instead"},
     {send_interval, 7, "use send_interval/4 instead"},
     {send_interval, 8, "use send_interval/4 instead"}
@@ -638,7 +637,7 @@ Same as [`send_interval(ecron_local, make_ref(), Spec, Pid, Message, unlimited, 
 """).
 -spec send_interval(crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Spec, Pid, Message) ->
-    send_interval(?LocalJob, make_ref(), Spec, Pid, Message).
+    send_interval(Spec, Pid, Message, #{}).
 
 ?DOC("""
 Sends a message to a process repeatedly based on a crontab schedule from the default registry. 

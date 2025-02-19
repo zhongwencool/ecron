@@ -13,6 +13,7 @@
 
 -export([echo/2]).
 -export([long_echo/3]).
+-export([store/0]).
 
 %%%%%%%%%%%%%%%%%%
 %%% Properties %%%
@@ -36,7 +37,7 @@ prop_cron_apply_ok() ->
                     func -> {fun echo/2, [self(), Request]};
                     wrong -> {?MODULE, echo, [undefined, Request]}
                 end,
-            {ok, Name} = ecron:add(Name, "*/2 * * * * *", MFA),
+            {ok, Name} = ecron:create(Name, "*/2 * * * * *", MFA),
             case FuncType =/= wrong of
                 true ->
                     Res = check_normal_response(Request, 2, 2),
@@ -65,8 +66,8 @@ prop_cron_apply_error() ->
             error_logger:tty(false),
             OkMFA = {?MODULE, long_echo, [650, self(), ?FUNCTION_NAME]},
             WrongMFA = {?MODULE, echo, [wrong, Request]},
-            {ok, OkName} = ecron:add({Name, ?FUNCTION_NAME}, "@every 1s", OkMFA),
-            {ok, WrongName} = ecron:add(Name, "@every 1s", WrongMFA),
+            {ok, OkName} = ecron:create({Name, ?FUNCTION_NAME}, "@every 1s", OkMFA),
+            {ok, WrongName} = ecron:create(Name, "@every 1s", WrongMFA),
             timer:sleep(1900),
             {ok, #{
                 crontab := CronSpec,
@@ -130,7 +131,7 @@ prop_restart_server() ->
                 {ecron_test_2, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited}
             ]),
             application:ensure_all_started(ecron),
-            {ok, Name} = ecron:add(Name, "@yearly", {io, format, ["Yearly~n"]}),
+            {ok, Name} = ecron:create(Name, "@yearly", {io, format, ["Yearly~n"]}),
             Res1 = ecron:statistic(ecron_local, Name),
             Pid = erlang:whereis(?LocalJob),
             erlang:exit(Pid, kill),
@@ -162,10 +163,8 @@ prop_singleton() ->
             application:set_env(ecron, adjusting_time_second, 1),
             application:stop(ecron),
             application:start(ecron),
-            {ok, Name} = ecron:add(
-                Name, "@every 1s", {timer, sleep, [1100]}, unlimited, unlimited, [
-                    {singleton, Singleton}
-                ]
+            {ok, Name} = ecron:create(
+                Name, "@every 1s", {timer, sleep, [1100]}, #{singleton => Singleton}
             ),
             timer:sleep(4200),
             {ok, Res} = ecron:statistic(ecron_local, Name),
@@ -227,24 +226,17 @@ prop_ecron_send_interval() ->
             Target =
                 case NeedReg of
                     false ->
-                        spawn(fun store/0);
+                        spawn(fun ?MODULE:store/0);
                     true ->
-                        Pid = spawn(fun store/0),
+                        Pid = spawn(fun ?MODULE:store/0),
                         true = erlang:register(Name, Pid),
                         Name
                 end,
-            {error, invalid_opts, [
-                {max_count, test}
-            ]} = ecron:send_interval(
-                ecron_local,
-                bad_max_count,
+            {error, invalid_opts, _} = ecron:send_interval(
                 "* * * * * *",
+                Target,
                 {add, self(), Message},
-                unlimited,
-                unlimited,
-                [
-                    {max_count, test}
-                ]
+                #{max_count => test}
             ),
             {ok, Job} = ecron:send_interval("* * * * * *", Target, {add, self(), Message}),
             Res1 =
@@ -280,9 +272,7 @@ prop_ecron_send_interval() ->
                 end,
             timer:sleep(160),
             {error, not_found} = ecron:statistic(ecron_local, Job),
-            {ok, Job1} = ecron:send_interval(
-                ecron_local, make_ref(), "0 1 1 * * *", Message, unlimited, unlimited, []
-            ),
+            {ok, Job1} = ecron:send_interval("0 1 1 * * *", Message),
             error_logger:tty(true),
             Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res1 =:= ok andalso Res4 =:= ok andalso
                 length(Results) =:= Ok andalso length(RunMs) =:= Ok andalso Job1 =/= Job
@@ -297,7 +287,14 @@ prop_add_with_count() ->
         term(),
         begin
             application:ensure_all_started(ecron),
-            {ok, _Name1} = ecron:add_with_count("@every 1s", {erlang, send, [self(), test]}, 2),
+            {ok, _Name1} = ecron:create(
+                make_ref(),
+                "@every 1s",
+                {erlang, send, [self(), test]},
+                #{
+                    max_count => 2
+                }
+            ),
             Res1 =
                 receive
                     test -> ok
