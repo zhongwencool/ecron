@@ -88,6 +88,9 @@ error_start_end_time(_Config) ->
     {error, invalid_time, _} = ecron:create(
         JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => unlimited, end_time => 12}
     ),
+    {error, invalid_opts, _} = ecron:create(
+        JobName, "0 10 8,9 * * 1-5", MFA, #{singleton => true1}
+    ),
     {ok, JobName} = ecron:create(
         JobName, "0 10 8,9 * * 1-5", MFA, #{start_time => {8, 0, 0}, end_time => unlimited}
     ),
@@ -128,7 +131,7 @@ max_runtime_ms_aborted(_Config) ->
     ?assertMatch(
         #{
             ok := 0,
-            failed := 1,
+            failed := 0,
             aborted := 1
         },
         Result2

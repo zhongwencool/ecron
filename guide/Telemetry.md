@@ -12,7 +12,7 @@ you can use your own event handler. For example, you can create a module to hand
 ```erlang
 -module(my_ecron_telemetry_logger).
 -include_lib("kernel/include/logger.hrl").
--define(Events, [[ecron, success], [ecron, failure], [ecron, activate], 
+-define(Events, [[ecron, success], [ecron, failure], [ecron, aborted], [ecron, activate], 
                  [ecron, deactivate], [ecron, delete], 
                  [ecron, global, up], [ecron, global, down]]).
 %% API
@@ -27,6 +27,12 @@ handle_event([ecron, activate], #{action_ms := Time}, #{name := Name, mfa := MFA
     ?LOG_INFO("EcronJob(~p)-~p activated at ~p .", [Name, MFA, Time]);
 handle_event([ecron, deactivate], #{action_ms := Time}, #{name := Name}, _Config) ->
     ?LOG_INFO("EcronJob(~p) deactivated at ~p .", [Name, Time]);
+handle_event([ecron, aborted], #{run_microsecond := Ms, run_result := Res},
+    #{name := Name, mfa := MFA}, _Config) ->
+    ?LOG_INFO("EcronJob(~p) aborted in ~p microsecond. ~p=apply(~p,~p,~p)", [Name, Ms, Res, M, F, A]);
+handle_event([ecron, skipped], #{last_task_pid := Pid, reason := Reason, skipped_ms := SkippedMs},
+    #{name := Name, mfa := MFA}, _Config) ->
+    ?LOG_INFO("EcronJob(~p) skipped at ~p. ~p=apply(~p,~p,~p) reason: ~p", [Name, SkippedMs, Pid, M, F, A, Reason]);
 handle_event([ecron, delete], #{action_ms := Time}, #{name := Name}, _Config) ->
     ?LOG_INFO("EcronJob(~p) deleted at ~p .", [Name, Time]);
 handle_event([ecron, success], #{run_microsecond := Ms, run_result := Res},

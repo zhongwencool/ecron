@@ -314,7 +314,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 
 """).
 -spec add(register(), name(), crontab_spec(), mfargs()) -> ecron_result().
-add(Register, JobName, Spec, {_, _, _} = MFA) ->
+add(Register, JobName, Spec, MFA) ->
     create(Register, JobName, Spec, MFA, unlimited, unlimited, []).
 
 ?DOC("""
@@ -1185,10 +1185,10 @@ next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone,
     of
         true ->
             {ok, NextMs};
-        false when NextMs - InitMs =< 3 * 365 * 24 * 3600 * 1000 ->
+        false when NextMs - InitMs =< 5 * 365 * 24 * 3600 * 1000 ->
             next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone, InitMs);
         false ->
-            {error, "can't find next schedule time in next 3 years"}
+            {error, "can't find next schedule time in next 5 years"}
     end.
 
 next_schedule_datetime(DateSpec, Min, DateTime, Start, End) ->
@@ -1287,11 +1287,19 @@ maybe_spawn_worker(true, false, Name, MFA, MaxRuntimeMs, JobTab) ->
 maybe_spawn_worker(true, Pid, Name, MFA, MaxRuntimeMs, JobTab) when is_pid(Pid) ->
     case is_process_alive(Pid) of
         true ->
-            error_logger:error_msg(
-                "Job ~p skipped - last execution is still running (pid:~p, fn:~p)."
-                " Use {singleton,false} for concurrent runs~n",
-                [Name, Pid, erlang:process_info(Pid, current_function)]
+            telemetry:execute(
+                ?Skipped,
+                #{
+                    last_task_pid => Pid,
+                    reason => "last task running, use {singleton, false} for concurrent runs",
+                    skipped_ms => current_millisecond()
+                },
+                #{
+                    name => Name,
+                    mfa => MFA
+                }
             ),
+            ets:update_counter(JobTab, Name, {#job.skipped, 1}),
             {0, Pid};
         false ->
             {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs])}
@@ -1319,13 +1327,19 @@ spawn_mfa(JobTab, Name, MFA, MaxRuntimeMs) ->
         case ets:lookup(JobTab, Name) of
             [] ->
                 ok;
-            [Job] ->
-                #job{failed = Failed, aborted = Aborted} = Job,
-                Elements = [
-                    {#job.failed, Failed + 1},
-                    {#job.aborted, Aborted + 1}
-                ],
-                ets:update_element(JobTab, Name, Elements)
+            [_] ->
+                telemetry:execute(
+                    ?Aborted,
+                    #{
+                        run_microsecond => MaxRuntimeMs,
+                        run_result => aborted
+                    },
+                    #{
+                        name => Name,
+                        mfa => MFA
+                    }
+                ),
+                ets:update_counter(JobTab, Name, {#job.aborted, 1})
         end,
         exit(Pid, kill)
     end.

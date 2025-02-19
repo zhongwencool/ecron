@@ -7,6 +7,8 @@
 -define(MAX_TIMEOUT, 4294967).
 -define(Success, [ecron, success]).
 -define(Failure, [ecron, failure]).
+-define(Aborted, [ecron, aborted]).
+-define(Skipped, [ecron, skipped]).
 -define(Activate, [ecron, activate]).
 -define(Deactivate, [ecron, deactivate]).
 -define(Delete, [ecron, delete]).
@@ -21,6 +23,7 @@
     ok = 0,
     failed = 0,
     aborted = 0,
+    skipped = 0,
     link = undefined,
     result = [],
     run_microsecond = []
