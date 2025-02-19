@@ -17,7 +17,7 @@ and time-based message delivery.
 -export([deactivate/1, activate/1, deactivate/2, activate/2]).
 -export([statistic/0, statistic/1, statistic/2]).
 -export([predict_datetime/2, predict_datetime/4]).
--export([reload/0]).
+-export([reload/0, reload/1]).
 -export([parse_spec/2]).
 
 %% Callback Function
@@ -908,6 +908,19 @@ Returns: `ok`
 reload() ->
     gen_server:cast(?LocalJob, reload),
     gen_server:cast({global, ?GlobalJob}, reload).
+
+?DOC("""
+Reloads all tasks manually. Useful when system time has changed significantly.
+
+Parameters:
+* `Register` - Process name where job is registered
+
+Returns: `ok`
+
+""").
+-spec reload(register()) -> ok.
+reload(Register) ->
+    gen_server:cast(Register, reload).
 
 ?DOC("""
 Parses a crontab specification and returns the next N trigger times.

@@ -2,7 +2,15 @@
 
 -include_lib("stdlib/include/assert.hrl").
 
--export([all/0, suite/0, groups/0, init_per_suite/1, end_per_suite/1, mail_delay/1]).
+-export([
+    all/0,
+    suite/0,
+    groups/0,
+    init_per_suite/1,
+    end_per_suite/1,
+    init_per_testcase/2,
+    mail_delay/1
+]).
 -export([basic/1, error_start_end_time/1, max_runtime_ms_aborted/1, max_runtime_ms_unlimited/1]).
 
 -define(NAME, ?MODULE).
@@ -29,7 +37,7 @@ end_per_suite(_Config) ->
 
 init_per_testcase(_TestCase, Config) ->
     application:ensure_all_started(ecron),
-    {ok, _Pid} = ecron:start_link(?NAME, []),
+    {ok, _Pid} = ecron:start_link(?NAME),
     Config.
 
 basic(_Config) ->
@@ -61,6 +69,7 @@ basic(_Config) ->
         type := cron
     } = Result,
     true = prop_ecron:check_cron_result(CrontabSpec, {0, 0, 0}, {23, 59, 59}, Next),
+    ok = ecron:reload(?NAME),
     ok = ecron:deactivate(?NAME, JobName),
     {ok, #{status := deactivate}} = ecron:statistic(?NAME, JobName),
     ok = ecron:delete(?NAME, JobName),
