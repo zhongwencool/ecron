@@ -6,6 +6,7 @@
     "./guide/Changelog.md",
     "LICENSE"
   ],
+  logo: "./guide/logo.svg",
   main: "readme",
   source_url: "https://github.com/zhongwencool/ecron",
   homepage_url: "https://github.com/zhongwencool/ecron",
