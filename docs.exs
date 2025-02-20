@@ -1,17 +1,22 @@
 [
   extras: [
     "README.md",
-    "./guide/Telemetry.md",
-    "./guide/Global.md",
-    "./guide/Changelog.md",
+    "./guide/crontab-format.md",
+    "./guide/implementation.md",
+    "./guide/global.md",
+    "./guide/changelog.md",
     "LICENSE"
   ],
   logo: "./guide/logo.svg",
+  authors: [
+    "Zhongwen Deng <zhongwencool@gmail.com>"
+  ],
   main: "readme",
   source_url: "https://github.com/zhongwencool/ecron",
   homepage_url: "https://github.com/zhongwencool/ecron",
   with_mermaid: true,
   api_reference: false,
+  warnings_as_errors: true,
   groups_for_docs: [
     "Job Management":
       &(&1[:name] in [:start_link, :create, :delete, :deactivate, :activate, :reload]),

@@ -356,6 +356,10 @@ parse_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs], Acc) ->
     parse_crontab([{Name, Spec, MFA, unlimited, unlimited, []} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs], Acc) ->
     parse_crontab([{Name, Spec, MFA, Start, End, []} | Jobs], Acc);
+parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Opts} | Jobs], Acc) when is_list(Opts) ->
+    Start = proplists:get_value(start_time, Opts, unlimited),
+    End = proplists:get_value(end_time, Opts, unlimited),
+    parse_crontab([{Name, Spec, MFA, Start, End, Opts} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs], Acc) ->
     case parse_job(Name, Spec, MFA, Start, End, Opts) of
         {ok, Job} ->

@@ -173,19 +173,21 @@ prop_singleton() ->
                 end_time := {23, 59, 59},
                 status := activate,
                 failed := 0,
+                skipped := Skipped,
                 ok := Ok,
                 results := Results,
                 run_microsecond := RunMs
             } = Res,
             ecron:delete(Name),
-            Num =
+            {Num, ExpectSkip} =
                 case Singleton of
-                    true -> 2;
-                    false -> 3
+                    true -> {2, 1};
+                    false -> {3, 0}
                 end,
             application:set_env(ecron, adjusting_time_second, 100000),
             error_logger:tty(true),
-            Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num
+            Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num andalso
+                ExpectSkip =:= Skipped
         end
     ).
 

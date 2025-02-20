@@ -1,5 +1,7 @@
 ### Precondition
 
+Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically.
+
 1. Fully Connected Cluster
  
    Because it depends on `global`'s name registration service. 

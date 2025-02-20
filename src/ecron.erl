@@ -1617,6 +1617,7 @@ job_to_statistic(Job, TimeZone, Now) ->
         opts = Opts,
         ok = Ok,
         failed = Failed,
+        skipped = Skipped,
         aborted = Aborted,
         result = Res,
         run_microsecond = RunMs
@@ -1628,6 +1629,7 @@ job_to_statistic(Job, TimeZone, Now) ->
         ok => Ok,
         failed => Failed,
         aborted => Aborted,
+        skipped => Skipped,
         opts => Opts,
         next => Predict,
         start_time => StartTime,
