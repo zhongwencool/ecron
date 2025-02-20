@@ -1,3 +1,5 @@
+# Unique Job In Cluster
+
 ### Precondition
 
 Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically.
@@ -18,34 +20,70 @@ Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allo
 
 ### Configuration
 
-1. `global_jobs`
+#### global_jobs
+<!-- tabs-open -->
+### Erlang
+```erlang
+%% sys.config
+[
+   {ecron, [
+      {global_jobs, [
+         %% {JobName, CrontabSpec, {M, F, A}}
+         %% {JobName, CrontabSpec, {M, F, A}, PropListOpts}
+         %% CrontabSpec
+            %%  1. "Minute Hour DayOfMonth Month DayOfWeek"
+            %%  2. "Second Minute Hour DayOfMonth Month DayOfWeek"
+            %%  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly
+            %%  4. @every 1h2m3s
+                  
+         {basic, "*/15 * * * *", {io, format, ["Runs on 0, 15, 30, 45 minutes~n"]}}         
+     ]}     
+    }
+].
+```
+### Elixir
+Configure ecron in your `config.exs` file with job specifications:
+```elixir
+# config/config.exs
+config :ecron,  
+  local_jobs: [
+    # {job_name, crontab_spec, {module, function, args}}
+    # {job_name, crontab_spec, {module, function, args}, PropListOpts}
+    # CrontabSpec formats:
+    #  1. "Minute Hour DayOfMonth Month DayOfWeek"
+    #  2. "Second Minute Hour DayOfMonth Month DayOfWeek"
+    #  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly
+    #  4. @every 1h2m3s
+    
+    {:basic, "*/15 * * * *", {IO, :puts, ["Runs on 0, 15, 30, 45 minutes"]}}   
+  ] 
+```
+<!-- tabs-close -->
 
-    the same format as `local_jobs`, default is `[]`. 
-    This means only run local jobs without running global task manager and monitor processes.
+the same format as `local_jobs`, default is `[]`. 
+This means only run local jobs without running global task manager and monitor processes.
 
-2. `global_quorum_size`
- 
-   ecron application live on at least `global_quorum_size` nodes in the same cluster, can be regarded as a healthy cluster. 
+#### global_quorum_size
+ecron application live on at least `global_quorum_size` nodes in the same cluster, can be regarded as a healthy cluster. 
+Global task manager only running on a healthy cluster.
 
-   Global task manager only running on a healthy cluster.
+If you want to guarantee always no more than **one** global task manager even when the cluster has network split,
+you should set it to **"half plus one"**. For example:
 
-   If you want to guarantee always no more than **one** global task manager even when the cluster has network split,
-   you should set it to **"half plus one"**. For example:
-
-   Run on majority:
+Run on majority:
    1. `ABC` 3 nodes in one cluster.
    2. `global_quorum_size=2`.
    3. (`ABC`) cluster split into 2 part(`AB`  =|=  `C`).
    4. the global task manager would run on `AB` cluster(`AB` is the healthy cluster now).
    5. `C` node only running local jobs without global jobs.
 
-   Run on majority 
+Run on majority 
    1. `ABC` 3 nodes in one cluster.
    2. `global_quorum_size=2`.
    3. (`ABC`) cluster split into 3 part(`A` =|= `B`  =|=  `C`).
    4. every node only running local jobs without global jobs(all nodes is unhealthy).
 
-   Run on every node if brain split.
+Run on every node if brain split.
    1. `ABC` nodes in one cluster.    
    2. `global_quorum_size=1`.
    3. (`ABC`) cluster split into 3 part(`A` =|= `B`  =|=  `C`).

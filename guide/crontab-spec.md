@@ -1,4 +1,5 @@
-# Crontab Format
+# Crontab Spec
+
 ## Basic Format
 
 A cron expression consists of 5-6 fields representing time units:

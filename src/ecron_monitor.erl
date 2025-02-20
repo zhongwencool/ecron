@@ -31,7 +31,7 @@ handle_info(_Msg, State) ->
     {ResL, Bad} = rpc:multicall([node() | nodes(visible)], ?MODULE, health, [], 5000),
     {Healthy, GoodNodes, BadNodes} = split(ResL, 0, [], Bad),
     Measurements = #{
-        action_ms => erlang:system_time(millisecond),
+        action_at => erlang:system_time(millisecond),
         quorum_size => QuorumSize,
         good_nodes => GoodNodes,
         bad_nodes => BadNodes

@@ -6,7 +6,7 @@
 %% (16#ffffffff div 1000) 49.71 days.
 -define(MAX_TIMEOUT, 4294967).
 -define(Success, [ecron, success]).
--define(Failure, [ecron, failure]).
+-define(Crashed, [ecron, crashed]).
 -define(Aborted, [ecron, aborted]).
 -define(Skipped, [ecron, skipped]).
 -define(Activate, [ecron, activate]).
@@ -21,7 +21,7 @@
     job,
     opts = [],
     ok = 0,
-    failed = 0,
+    crashed = 0,
     aborted = 0,
     skipped = 0,
     link = undefined,

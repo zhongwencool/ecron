@@ -91,7 +91,7 @@ and time-based message delivery.
     type => cron | every,
     crontab => crontab(),
     status => deactivate | activate,
-    failed => non_neg_integer(),
+    crashed => non_neg_integer(),
     ok => non_neg_integer(),
     aborted => non_neg_integer(),
     opts => option_list(),
@@ -172,7 +172,7 @@ Parameters:
    * start_time: `{Hour,Min,Sec}|unlimited` - Start time for job execution (default: `unlimited`)
    * end_time: `{Hour,Min,Sec}|unlimited` - End time for job execution (default: `unlimited`) 
    * singleton: `boolean()` - If true, prevents concurrent execution (default: `false`)
-   * max_count: `pos_integer()|unlimited` - Maximum number of executions allowed (default: `unlimited`)
+   * max_count: `pos_integer()|unlimited` - Maximum number of executions allowed (default: `unlimited`). It will be automatically removed When a job reaches its max_count limit.
    * max_runtime_ms: `pos_integer()|unlimited` - Maximum runtime in milliseconds per execution (default: `unlimited`)
 
 Returns: `{ok, JobName}` | `{error, already_exist}` | `{error, parse_error(), term()}`
@@ -226,7 +226,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
-If we can't find the next schedule time in next 3 years, return 'can't find next schedule time in next 5 years'.
+If we can't find the next schedule time in next 5 years, return 'can't find next schedule time in next 5 years'.
 
 ```erlang
  ecron:create(invalid_job, "* 0,13 * * *", {io, format, ["test"]}, #{
@@ -234,7 +234,7 @@ If we can't find the next schedule time in next 3 years, return 'can't find next
        end_time => {12,0,0}
    }).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in next 3 years",
+       #{reason => "can't find next schedule time in next 5 years",
          spec => "* 0,13 * * *",
          start_time => {1,0,0},
          end_time => {12,0,0}}}
@@ -825,10 +825,32 @@ Returns: `{ok, statistic()}` | `{error, not_found}`
 
 Where statistic() contains:
 - Job configuration
-- Execution counts (ok/failed/aborted)  
+- Execution counts (ok/crashed/aborted/skipped)  
 - Latest results
 - Run times
 - Next scheduled runs
+```erlang
+1> ecron:statistic(basic).
+[#{name => basic,node => nonode@nohost,ok => 0,
+   status => activate,type => cron,
+   next => ["2025-02-20T22:15:00+08:00"...],        
+   opts => [{singleton,false},{max_count,unlimited},{max_runtime_ms,unlimited}],
+   mfa => {io,format,["Runs on 0, 15, 30, 45 minutes~n"]},
+   aborted => 0,crashed => 0, skipped => 0,
+   start_time => {0,0,0},
+   end_time => {23,59,59},
+   run_microsecond => [],
+   crontab =>
+       #{second => [0],
+         month => '*',
+         minute => [0,15,30,45],
+         hour => '*',day_of_month => '*',day_of_week => '*'},
+   results => []}]
+```
+- `ok`: successful job.
+- `crashed`: crashed job.
+- `skipped`: singleton(true) job has been skipped due to the previous task still running.
+- `aborted`: job has been aborted due to exceeding `max_runtime_ms`.
 
 """).
 -spec statistic(register(), name()) -> {ok, statistic()} | {error, not_found}.
@@ -866,7 +888,7 @@ ecron:statistic(UniqueJobName).
         ],
    opts => [{singleton,false}, {max_count,unlimited}, {max_runtime_ms,unlimited}],
    mfa => {io,format,["Run at 04:00 everyday.~n",[]]},
-   aborted => 0,failed => 0,run_microsecond => [],
+   aborted => 0,crashed => 0,skipped => 0, run_microsecond => [],
    start_time => {0,0,0},
    end_time => {23,59,59},
    crontab =>
@@ -936,7 +958,7 @@ Returns: `{ok, #{type => cron|every, crontab => parsed_spec, next => [rfc3339_st
 
 """).
 -spec parse_spec(crontab_spec(), pos_integer()) ->
-    {ok, #{type => cron | every, crontab => crontab_spec(), next => [rfc3339_string()]}}
+    {ok, #{type => cron | every, crontab => crontab(), next => [rfc3339_string()]}}
     | {error, atom(), term()}.
 parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
     parse_spec2(ecron_spec:parse_spec(Spec), Num).
@@ -1094,7 +1116,7 @@ add_job(JobTab, TimerTab, Job, TimeZone, Opts, ForceUpdate) ->
                 link = PidOrUndef
             },
             Now = current_millisecond(),
-            telemetry:execute(?Activate, #{action_ms => Now}, #{name => Name, mfa => MFA}),
+            telemetry:execute(?Activate, #{action_at => Now}, #{name => Name, mfa => MFA}),
             update_timer(Now, InitTimer, Job, TimerTab, TimeZone);
         false ->
             {error, already_exist}
@@ -1114,7 +1136,7 @@ deactivate_job(Name, JobTab, TimerTab) ->
     ets:select_delete(TimerTab, ?MatchNameSpec(Name)),
     case ets:update_element(JobTab, Name, {#job.status, deactivate}) of
         true ->
-            telemetry:execute(?Deactivate, #{action_ms => current_millisecond()}, #{name => Name}),
+            telemetry:execute(?Deactivate, #{action_at => current_millisecond()}, #{name => Name}),
             ok;
         false ->
             {error, not_found}
@@ -1126,7 +1148,7 @@ delete_job(JobTab, TimerTab, Name) ->
         [] ->
             ok;
         [#job{link = Link}] ->
-            telemetry:execute(?Delete, #{action_ms => current_millisecond()}, #{name => Name}),
+            telemetry:execute(?Delete, #{action_at => current_millisecond()}, #{name => Name}),
             unlink_pid(Link),
             ets:delete(JobTab, Name)
     end.
@@ -1304,7 +1326,7 @@ maybe_spawn_worker(true, Pid, Name, MFA, MaxRuntimeMs, JobTab) when is_pid(Pid) 
                 #{
                     last_task_pid => Pid,
                     reason => "last task running, use {singleton, false} for concurrent runs",
-                    skipped_ms => current_millisecond()
+                    action_at => current_millisecond()
                 },
                 #{
                     name => Name,
@@ -1344,7 +1366,8 @@ spawn_mfa(JobTab, Name, MFA, MaxRuntimeMs) ->
                     ?Aborted,
                     #{
                         run_microsecond => MaxRuntimeMs,
-                        run_result => aborted
+                        run_result => aborted,
+                        action_at => current_millisecond()
                     },
                     #{
                         name => Name,
@@ -1359,7 +1382,7 @@ spawn_mfa(JobTab, Name, MFA, MaxRuntimeMs) ->
 ?DOC(false).
 spawn_mfa(JobTab, Name, MFA) ->
     Start = erlang:monotonic_time(),
-    {Event, OkInc, FailedInc, NewRes} =
+    {Event, OkInc, CrashedInc, NewRes} =
         try
             case MFA of
                 {erlang, send, [Pid, Message]} ->
@@ -1372,22 +1395,26 @@ spawn_mfa(JobTab, Name, MFA) ->
             end
         catch
             Error:Reason:Stacktrace ->
-                {?Failure, 0, 1, {Error, Reason, Stacktrace}}
+                {?Crashed, 0, 1, {Error, Reason, Stacktrace}}
         end,
     End = erlang:monotonic_time(),
     Cost = erlang:convert_time_unit(End - Start, native, microsecond),
-    telemetry:execute(Event, #{run_microsecond => Cost, run_result => NewRes}, #{
-        name => Name,
-        mfa => MFA
-    }),
+    telemetry:execute(
+        Event,
+        #{run_microsecond => Cost, action_at => current_millisecond(), run_result => NewRes},
+        #{
+            name => Name,
+            mfa => MFA
+        }
+    ),
     case ets:lookup(JobTab, Name) of
         [] ->
             ok;
         [Job] ->
-            #job{ok = Ok, failed = Failed, run_microsecond = RunMs, result = Results} = Job,
+            #job{ok = Ok, crashed = Crashed, run_microsecond = RunMs, result = Results} = Job,
             Elements = [
                 {#job.ok, Ok + OkInc},
-                {#job.failed, Failed + FailedInc},
+                {#job.crashed, Crashed + CrashedInc},
                 {#job.run_microsecond, lists:sublist([Cost | RunMs], ?MAX_SIZE)},
                 {#job.result, lists:sublist([NewRes | Results], ?MAX_SIZE)}
             ],
@@ -1616,7 +1643,7 @@ job_to_statistic(Job, TimeZone, Now) ->
         status = Status,
         opts = Opts,
         ok = Ok,
-        failed = Failed,
+        crashed = Crashed,
         skipped = Skipped,
         aborted = Aborted,
         result = Res,
@@ -1627,7 +1654,7 @@ job_to_statistic(Job, TimeZone, Now) ->
     JobSpec#{
         status => Status,
         ok => Ok,
-        failed => Failed,
+        crashed => Crashed,
         aborted => Aborted,
         skipped => Skipped,
         opts => Opts,

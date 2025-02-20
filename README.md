@@ -96,6 +96,8 @@ config :ecron,
 * When a job reaches its `max_count` limit, it will be automatically removed. By default, `max_count` is set to `unlimited`.
 * By default, `singleton` is set to `false`, which means multiple instances of the same job can run concurrently. Set `singleton` to `true` to ensure only one instance runs at a time.
 
+For all PropListOpts, refer to the documentation for [`ecron:create/4`](https://hexdocs.pm/ecron/ecron.html#create/4).
+
 ## Runtime Usage
 Besides loading jobs from config files at startup, you can add jobs from your code.
 <!-- tabs-open -->
@@ -105,8 +107,9 @@ JobName = every_4am_job,
 MFA = {io, format, ["Run at 04:00 everyday.\n"]},
 Options = #{max_runtime_ms => 1000},
 ecron:create(JobName, "0 4 * * *", MFA, Options).
-ecron:statics(JobName).
-ecron:delete(JobName).
+Statistic = ecron:statistic(JobName),
+ecron:delete(JobName),
+Statistic.
 ```
 ### Elixir
 ```elixir
@@ -114,13 +117,14 @@ job_name = :every_4am_job
 mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 options = %{max_runtime_ms: 1000}
 {:ok, ^job_name} = :ecron.create(job_name, "0 4 * * *", mfa, options)
-:ecron.statics(job_name)
+statistic = :ecron.statistic(job_name)
 :ecron.delete(job_name)
+statistic
 ```
 <!-- tabs-close -->
 
 ### Multi Register
-For most applications, the above two methods are sufficient. However, Ecron offers a more flexible way to manage job lifecycles.
+For most applications, the above two methods are enough. However, Ecron offers a more flexible way to manage job lifecycles.
 
 For example, when applications A and B need separate cron jobs, you can create a dedicated register for each. This ensures jobs are removed when their parent application stops.
 
@@ -166,7 +170,7 @@ children = [
 ```
 <!-- tabs-close -->
 
-After setup, use `ecron:create/4` and `ecron:delete/2` to manage your jobs.
+After setup, use [`ecron:create/4`](https://hexdocs.pm/ecron/ecron.html#create/4) and [`ecron:delete/2`](https://hexdocs.pm/ecron/ecron.html#delete/2) to manage your jobs.
 
 ## Time Zone
 <!-- tabs-open -->
@@ -231,10 +235,16 @@ config :ecron,
 If you want custom logging control, you can create your own event handler. 
 See [`src/ecron_telemetry_logger.erl`](https://github.com/zhongwencool/ecron/blob/main/src/ecron_telemetry_logger.erl) as a reference implementation.
 
-## Test
 
-This command will run property-based tests, common tests, and generate a coverage report with verbose output.
-
+## Contributing
+To run run property-based tests, common tests, and generate a coverage report with verbose output.
 ```shell
   $ rebar3 do proper -c, ct -c, cover -v
 ```
+It's take about 10-15 minutes.
+
+## License
+Ecron is released under the Apache-2.0 license. See the [license file](LICENSE).
+
+
+

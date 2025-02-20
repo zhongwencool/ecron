@@ -9,7 +9,7 @@
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
 
-prop_predict_cron_datetime(doc) -> "predict cron datetime failed";
+prop_predict_cron_datetime(doc) -> "predict cron datetime crashed";
 prop_predict_cron_datetime(opts) -> [{numtests, 8000}].
 prop_predict_cron_datetime() ->
     ?FORALL(
@@ -36,7 +36,7 @@ prop_predict_cron_datetime() ->
                     Start, End, NewCrontabSpec, {local, NowDateTime}, 500, []
                 ),
                 ?WHENFAIL(
-                    io:format("Predict ~p\n ~p\nFailed: ~p~n~p~n", [
+                    io:format("Predict ~p\n ~p\ncrashed: ~p~n~p~n", [
                         SpecStr,
                         NewSpec,
                         Start,
@@ -49,7 +49,7 @@ prop_predict_cron_datetime() ->
         )
     ).
 
-prop_predict_every_datetime(doc) -> "predict every datetime failed";
+prop_predict_every_datetime(doc) -> "predict every datetime crashed";
 prop_predict_every_datetime(opts) -> [{numtests, 3000}].
 prop_predict_every_datetime() ->
     ?FORALL(
@@ -68,7 +68,7 @@ prop_predict_every_datetime() ->
             },
             {ok, List} = ecron:predict_datetime(activate, NewSpec, Start, End, 10, utc, Now),
             ?WHENFAIL(
-                io:format("Predict Failed: ~p ~p~n", [NewSpec, List]),
+                io:format("Predict crashed: ~p ~p~n", [NewSpec, List]),
                 prop_ecron:check_every_result(Second, Start, End, utc, List)
             )
         end

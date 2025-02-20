@@ -350,7 +350,7 @@ valid_statistic(State, Name, [Res]) ->
                 crontab := Cron,
                 start_time := StartTime,
                 end_time := EndTime,
-                failed := Failed,
+                crashed := Crashed,
                 next := Next,
                 ok := Ok,
                 mfa := MFA,
@@ -359,7 +359,7 @@ valid_statistic(State, Name, [Res]) ->
             } = Res,
             case
                 Cron =:= CrontabSpec andalso
-                    Failed =:= 0 andalso
+                    Crashed =:= 0 andalso
                     Ok >= 0 andalso
                     MFAExpect =:= MFA andalso
                     length(Results) =< 20 andalso

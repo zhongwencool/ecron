@@ -16,19 +16,17 @@ Ecron uses an efficient approach to manage job execution times and intervals:
     
 Additionally, you can use `ecron:statistic(Name)` to see the job's latest 16 results and execute times.
 ```
-    ecron_sup------->ecron(registered as `ecron_local`)
-                      |
-                   |------| ets:new(timer, [ordered_set])
-                   | init | ets:insert(timer, [{{NextTriggeredTime,Name}...])
-                   |------|
-             |------->|
-             |     |------| {NextTriggeredTime,Name} = OldKey = ets:first(timer)
-             |     |      | sleep(NextTriggeredTime - current_time())
-             |     | loop | spawn a process to execute MFA
-             |     |      | ets:delete(timer, OldKey)
-             |     |------| ets:insert(timer, {{NewTriggeredTime,Name}...])
-             |<-------|
+    ecron_sup-------> ecron (registered as `ecron_local`)
+                       |
+                    |------| ets:new(timer, [ordered_set])
+                    | init | ets:insert(timer, [{{NextTriggeredTime,Name}...])
+                    |------|
+              |------->|
+              |     |------| {NextTriggeredTime,Name} = OldKey = ets:first(timer)
+              |     |      | sleep(NextTriggeredTime - current_time())
+              |     | loop | spawn a process to execute MFA
+              |     |      | ets:delete(timer, OldKey)
+              |     |------| ets:insert(timer, {{NewTriggeredTime,Name}...])
+              |<-------|
 ```
-
-[Check this for global_jobs workflow](global.html#Implementation).       
 

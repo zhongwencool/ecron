@@ -18,7 +18,7 @@
 %%%%%%%%%%%%%%%%%%
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
-prop_cron_apply_ok(doc) -> "add cron failed";
+prop_cron_apply_ok(doc) -> "add cron crashed";
 prop_cron_apply_ok(opts) -> [{numtests, 20}].
 prop_cron_apply_ok() ->
     ?FORALL(
@@ -54,7 +54,7 @@ prop_cron_apply_ok() ->
         end
     ).
 
-prop_cron_apply_error(doc) -> "add cron failed";
+prop_cron_apply_error(doc) -> "add cron crashed";
 prop_cron_apply_error(opts) -> [{numtests, 10}].
 prop_cron_apply_error() ->
     ?FORALL(
@@ -75,12 +75,12 @@ prop_cron_apply_error() ->
                 end_time := {23, 59, 59},
                 mfa := RMFA,
                 name := RName,
-                failed := Failed,
+                crashed := Crashed,
                 ok := Ok,
                 results := Result
             }} = ecron:statistic(ecron_local, WrongName),
             {ok, #{
-                failed := Failed1,
+                crashed := Crashed1,
                 ok := Ok1
             }} = ecron:statistic(ecron_local, OkName),
             ok = ecron:delete(WrongName),
@@ -91,8 +91,8 @@ prop_cron_apply_error() ->
                 WrongMFA =:= RMFA andalso
                 Ok =:= 0 andalso
                 Ok1 =:= 1 andalso
-                Failed =:= length(Result) andalso
-                Failed1 =:= 0 andalso
+                Crashed =:= length(Result) andalso
+                Crashed1 =:= 0 andalso
                 lists:all(
                     fun(R) -> {element(1, R), element(2, R)} =:= {error, function_clause} end,
                     Result
@@ -172,7 +172,7 @@ prop_singleton() ->
                 start_time := {0, 0, 0},
                 end_time := {23, 59, 59},
                 status := activate,
-                failed := 0,
+                crashed := 0,
                 skipped := Skipped,
                 ok := Ok,
                 results := Results,
@@ -261,7 +261,7 @@ prop_ecron_send_interval() ->
                 start_time := {0, 0, 0},
                 end_time := {23, 59, 59},
                 status := activate,
-                failed := 0,
+                crashed := 0,
                 ok := Ok,
                 results := Results,
                 run_microsecond := RunMs

@@ -1,7 +1,7 @@
 [
   extras: [
     "README.md",
-    "./guide/crontab-format.md",
+    "./guide/crontab-spec.md",
     "./guide/implementation.md",
     "./guide/global.md",
     "./guide/changelog.md",

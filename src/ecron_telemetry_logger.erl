@@ -1,10 +1,11 @@
+%%% @private
 -module(ecron_telemetry_logger).
 
 -include_lib("kernel/include/logger.hrl").
 -include("ecron.hrl").
 
 -define(Events, [
-    ?Success, ?Skipped, ?Aborted, ?Failure, ?Activate, ?Deactivate, ?Delete, ?GlobalUp, ?GlobalDown
+    ?Success, ?Skipped, ?Aborted, ?Crashed, ?Activate, ?Deactivate, ?Delete, ?GlobalUp, ?GlobalDown
 ]).
 %% API
 -export([attach/0, detach/0]).

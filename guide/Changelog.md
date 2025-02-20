@@ -1,3 +1,4 @@
+# Changelog
 
 ### 1.0.2
 - Use ex_doc to update documentation.

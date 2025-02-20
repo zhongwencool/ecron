@@ -59,7 +59,7 @@ basic(_Config) ->
                 second := [0]
             } = CrontabSpec,
         end_time := {23, 59, 59},
-        failed := 0,
+        crashed := 0,
         mfa := MFA,
         name := check_mail,
         next := Next,
@@ -120,7 +120,7 @@ max_runtime_ms_aborted(_Config) ->
     {ok, Result} = ecron:statistic(?NAME, JobName),
     ?assertMatch(
         #{
-            failed := 0,
+            crashed := 0,
             mfa := MFA,
             name := JobName,
             next := _,
@@ -137,7 +137,7 @@ max_runtime_ms_aborted(_Config) ->
     ?assertMatch(
         #{
             ok := 0,
-            failed := 0,
+            crashed := 0,
             aborted := 1
         },
         Result2
@@ -159,7 +159,7 @@ max_runtime_ms_unlimited(_Config) ->
     {ok, Result} = ecron:statistic(?NAME, UnlimitedJob),
     ?assertMatch(
         #{
-            failed := 0,
+            crashed := 0,
             mfa := MFA,
             name := UnlimitedJob,
             next := _,
@@ -177,7 +177,7 @@ max_runtime_ms_unlimited(_Config) ->
         #{
             ok := 1,
             aborted := 0,
-            failed := 0
+            crashed := 0
         },
         Result2
     ),
@@ -195,7 +195,7 @@ max_runtime_ms_unlimited(_Config) ->
         #{
             ok := 1,
             aborted := 0,
-            failed := 0
+            crashed := 0
         },
         Result3
     ),
