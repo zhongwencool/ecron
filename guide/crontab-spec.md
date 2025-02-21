@@ -57,4 +57,4 @@ For simpler scheduling needs, use `@every` with a duration:
 "@every 1h30m"
 ```
 
-Duration units: `d`(days), `h`(hours), `m`(minutes), `s`(seconds)
+Duration units: `d` (days), `h` (hours), `m` (minutes), `s` (seconds)

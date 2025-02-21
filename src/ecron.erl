@@ -218,7 +218,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 > #### Singleton {: .info}
 > When a job's singleton option is set to true, the system checks 
 > if there is already an instance of the job running before starting a new execution. 
-> If an instance is already running（old pid is alive）, the new execution will be skipped.
+> If an instance is already running (old pid is alive), the new execution will be skipped.
 
 > #### TimeRange {: .info}
 > The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
@@ -226,7 +226,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
-If we can't find the next schedule time in next 5 years, return 'can't find next schedule time in next 5 years'.
+If we can't find the next schedule time in the next 5 years, return 'can't find next schedule time in the next 5 years'.
 
 ```erlang
  ecron:create(invalid_job, "* 0,13 * * *", {io, format, ["test"]}, #{
@@ -234,7 +234,7 @@ If we can't find the next schedule time in next 5 years, return 'can't find next
        end_time => {12,0,0}
    }).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in next 5 years",
+       #{reason => "can't find next schedule time in the next 5 years",
          spec => "* 0,13 * * *",
          start_time => {1,0,0},
          end_time => {12,0,0}}}
@@ -410,12 +410,12 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
-If we can't find the next schedule time in next 5 years, return 'can't find next schedule time in next 5 years'.
+If we can't find the next schedule time in the next 5 years, return 'can't find next schedule time in the next 5 years'.
 
 ```erlang
 ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in next 5 years",
+       #{reason => "can't find next schedule time in the next 5 years",
          start => {1,0,0},
          stop => {12,0,0},
          spec => "* 0,13 * * *"}}
@@ -461,12 +461,12 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
-If we can't find the next schedule time in next 5 years, return 'can't find next schedule time in next 5 years'.
+If we can't find the next schedule time in the next 5 years, return 'can't find next schedule time in the next 5 years'.
 
 ```erlang
 ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in next 5 years",
+       #{reason => "can't find next schedule time in the next 5 years",
          start => {1,0,0},
          stop => {12,0,0},
          spec => "* 0,13 * * *"}}
@@ -1222,7 +1222,7 @@ next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone,
         false when NextMs - InitMs =< 5 * 365 * 24 * 3600 * 1000 ->
             next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone, InitMs);
         false ->
-            {error, "can't find next schedule time in next 5 years"}
+            {error, "can't find next schedule time in the next 5 years"}
     end.
 
 next_schedule_datetime(DateSpec, Min, DateTime, Start, End) ->

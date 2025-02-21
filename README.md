@@ -4,14 +4,14 @@
 
 ![EcronLogo](https://github.com/user-attachments/assets/ad3b493b-c1ef-4528-b7be-1e074c17b993)
 
-Ecron supports both cron-style and interval-based job scheduling, focus on resiliency, correctness and lightweight with comprehensive testing via PropTest.
+Ecron supports both cron-style and interval-based job scheduling, focusing on resiliency, correctness, and lightweight with comprehensive testing via PropTest.
 
 ## Use Case
 Ecron's precise scheduling is perfect for:
 
 - **Security**: `0 3 * * 0` Rotate API keys and dynamic credentials automatically every Sunday at 3 AM
 - **Flash Sale**: `0 8 * * *` Launch flash sales with precision at 8 AM
-- **Analytics**: `0 9 * * 1` Sending with comprehensive weekly reports At every Monday at 9 AM
+- **Analytics**: `0 9 * * 1` Sending comprehensive weekly reports every Monday at 9 AM
 - **Disk Protection**: `30 23 * * *` Compress and archive old logs at 23:30 daily
 - **Data Cleanup**: `0 1 1 * *` Pruning inactive users on the first day of each month
 - **Data Backup**: `0 2 * * *` Create reliable Mnesia database backups every day at 2 AM
@@ -85,7 +85,7 @@ config :ecron,
     {:sec_in_spec, "0 0 1-6/2,18 * * *", {IO, :puts, ["Runs on 1,3,6,18 o'clock:"]}},
     {:hourly, "@hourly", {IO, :puts, ["Runs every(0-23) o'clock"]}},
     {:interval, "@every 30m", {IO, :puts, ["Runs every 30 minutes"]}},    
-    {:limit_time, "*/15 * * * *", {IO, :puts, ["Runs 0, 15, 30, 45 minutes after 8:20am"]}, [{start_time, {8,20,0}}, {end_time, {23, 59, 59}}]},
+    {:limit_time, "*/15 * * * *", {IO, :puts, ["Runs 0, 15, 30, 45 minutes after 8:20am"]}, [start_time: {8,20,0}, end_time: {23, 59, 59}]},
     {:limit_count, "@every 1m", {IO, :puts, ["Runs 10 times"]}, [max_count: 10]},
     {:limit_concurrency, "@minutely", {Process, :sleep, [61000]}, [singleton: true]},
     {:limit_runtime_ms, "@every 1m", {Process, :sleep, [2000]}, [max_runtime_ms: 1000]}
@@ -104,7 +104,7 @@ Besides loading jobs from config files at startup, you can add jobs from your co
 ### Erlang
 ```erlang
 JobName = every_4am_job,
-MFA = {io, format, ["Run at 04:00 everyday.\n"]},
+MFA = {io, format, ["Run at 04:00 every day.\n"]},
 Options = #{max_runtime_ms => 1000},
 ecron:create(JobName, "0 4 * * *", MFA, Options).
 Statistic = ecron:statistic(JobName),
@@ -114,7 +114,7 @@ Statistic.
 ### Elixir
 ```elixir
 job_name = :every_4am_job
-mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+mfa = {IO, :puts, ["Run at 04:00 every day.\n"]}
 options = %{max_runtime_ms: 1000}
 {:ok, ^job_name} = :ecron.create(job_name, "0 4 * * *", mfa, options)
 statistic = :ecron.statistic(job_name)
@@ -175,7 +175,7 @@ After setup, use [`ecron:create/4`](https://hexdocs.pm/ecron/ecron.html#create/4
 ## Time Functions
 Ecron can manage recurring jobs. It also supports one-time tasks and time-based message delivery.
 
-[`ecron:send_after/3`](https://hexdocs.pm/ecron/ecron.html#send_after/2) Create a one-time timer that sends a message, Just like [`erlang:send_after/3`](https://www.erlang.org/doc/apps/erts/erlang.html#send_after/3) but triggered with a crontab spec.
+[`ecron:send_after/3`](https://hexdocs.pm/ecron/ecron.html#send_after/2) Create a one-time timer that sends a message, just like [`erlang:send_after/3`](https://www.erlang.org/doc/apps/erts/erlang.html#send_after/3) but triggered with a crontab spec.
 <!-- tabs-open -->
 ### Erlang
 ```erlang
@@ -252,7 +252,7 @@ config :ecron,
 
 ## Troubleshooting
 
-Ecron provides functions to assist with debugging at running time:
+Ecron provides functions to assist with debugging at runtime:
 [`ecron:statistic/x ecron:parse_spec/2`](https://hexdocs.pm/ecron/ecron.html#debugging-testing)
 
 ## Telemetry
@@ -274,7 +274,7 @@ Ecron logs all events by default.
 | global,up   |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
 | global,down |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
 
-For all failed event, refer to the documentation for [`ecron:statistic/2`](https://hexdocs.pm/ecron/ecron.html#statistic/2).
+For all failed events, refer to the documentation for [`ecron:statistic/2`](https://hexdocs.pm/ecron/ecron.html#statistic/2).
 
 You can enable or disable logging via `log` configuration.
 <!-- tabs-open -->
@@ -301,7 +301,7 @@ config :ecron,
 - **alert**: Captures global up/down events.
 - **error**: Captures crashed, skipped, aborted, and global up/down events.
 
-> ### How ? {: .info}
+> ### How? {: .info}
 > Use [logger:set_module_level(ecron_telemetry_logger, Log)](https://www.erlang.org/doc/apps/kernel/logger.html#set_module_level/2) to override the primary log level of Logger for log events originating from the ecron_telemetry_logger module.
 > This means that even if you set the primary log level to error, but the module log level is set to all, all ecron logs will be captured.
  
@@ -311,11 +311,11 @@ See [`src/ecron_telemetry_logger.erl`](https://github.com/zhongwencool/ecron/blo
 
 
 ## Contributing
-To run run property-based tests, common tests, and generate a coverage report with verbose output.
+To run property-based tests, common tests, and generate a coverage report with verbose output.
 ```shell
   $ rebar3 do proper -c, ct -c, cover -v
 ```
-It's take about 10-15 minutes.
+It takes about 10-15 minutes.
 
 ## License
 Ecron is released under the Apache-2.0 license. See the [license file](LICENSE).
