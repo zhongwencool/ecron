@@ -172,11 +172,64 @@ children = [
 
 After setup, use [`ecron:create/4`](https://hexdocs.pm/ecron/ecron.html#create/4) and [`ecron:delete/2`](https://hexdocs.pm/ecron/ecron.html#delete/2) to manage your jobs.
 
+## Time Functions
+Ecron can manage recurring jobs. It also supports one-time tasks and time-based message delivery.
+
+[`ecron:send_after/3`](https://hexdocs.pm/ecron/ecron.html#send_after/2) Create a one-time timer that sends a message, Just like [`erlang:send_after/3`](https://www.erlang.org/doc/apps/erts/erlang.html#send_after/3) but triggered with a crontab spec.
+<!-- tabs-open -->
+### Erlang
+```erlang
+ecron:send_after("*/4 * * * * *", self(), hello_world),
+receive Msg -> io:format("receive:~s~n", [Msg]) after 5000 -> timeout end.
+```
+
+### Elixir
+```elixir
+:ecron.send_after("*/4 * * * * *", self(), :hello_world)
+receive do msg -> IO.puts("receive: #{msg}") after 5000 -> :timeout end
+```
+<!-- tabs-close -->
+
+Sends a message to a process repeatedly based on a crontab schedule.
+
+[`ecron:send_interval/3`](https://hexdocs.pm/ecron/ecron.html#send_interval/3) Create a repeating timer that sends a message, just like [`timer:send_interval/3`](https://www.erlang.org/doc/apps/stdlib/timer.html#send_interval/3) but triggered with a crontab spec.
+<!-- tabs-open -->
+### Erlang
+```erlang
+ecron:send_interval("*/4 * * * * *", self(), hello_world),
+Loop = fun(Loop) ->
+  receive
+    Msg -> 
+      io:format("[~p] receive: ~s~n", [erlang:time(), Msg]),
+      Loop(Loop)
+  after
+    5000 -> timeout
+  end
+end,
+Loop(Loop).
+```
+
+### Elixir
+```elixir
+:ecron.send_interval("*/4 * * * * *", self(), :hello_world)
+loop = fn loop ->
+  receive do
+    msg -> 
+      IO.puts("[#{Time.utc_now()}] receive: #{msg}")
+      loop.(loop)
+  after
+    5000 -> :timeout
+  end
+end
+loop.(loop)
+```
+
+<!-- tabs-close -->
 ## Time Zone
 <!-- tabs-open -->
 ### Erlang
 
-Configure ecron in your `sys.config` file with timezone and job specifications:
+Configure ecron in your `sys.config` file with timezone:
 
 ```erlang
 %% sys.config
@@ -243,13 +296,14 @@ config :ecron,
   log: :all
 ```
 <!-- tabs-close -->
-- **all**: Logs all events.
-- **none**: Logs no events.
-- **alert**: Logs global(up/down) events.
-- **error**: Logs crashed, skipped, aborted, and global(up/down) events.
+- **all**: Captures all events.
+- **none**: Captures no events.
+- **alert**: Captures global up/down events.
+- **error**: Captures crashed, skipped, aborted, and global up/down events.
 
 > ### How ? {: .info}
-> Use [logger:set_module_level(ecron_telemetry_logger, Log)](https://www.erlang.org/doc/apps/kernel/logger.html#set_module_level/2) to overrides the primary log level of Logger for log events originating from the ecron_telemetry_logger module.
+> Use [logger:set_module_level(ecron_telemetry_logger, Log)](https://www.erlang.org/doc/apps/kernel/logger.html#set_module_level/2) to override the primary log level of Logger for log events originating from the ecron_telemetry_logger module.
+> This means that even if you set the primary log level to error, but the module log level is set to all, all ecron logs will be captured.
  
 ### Writing your own handler
 If you want custom logging control, you can create your own event handler. 

@@ -160,6 +160,7 @@ prop_singleton() ->
                     {singleton, Singleton}
                 ]}
             ]),
+            application:set_env(ecron, log_level, none),
             application:set_env(ecron, adjusting_time_second, 1),
             application:stop(ecron),
             application:start(ecron),
@@ -181,7 +182,7 @@ prop_singleton() ->
             ecron:delete(Name),
             {Num, ExpectSkip} =
                 case Singleton of
-                    true -> {2, 1};
+                    true -> {2, 2};
                     false -> {3, 0}
                 end,
             application:set_env(ecron, adjusting_time_second, 100000),

@@ -1,4 +1,0 @@
-%{
-  "ecron": {:hex, :ecron, "0.5.2", "66e092f1e41c6c52de7c0c88f023ecc0dbe44fbb614bd9bc8aba38ba5b6deff0", [:rebar3], [{:telemetry, "~>0.4.0", [hex: :telemetry, repo: "hexpm", optional: false]}], "hexpm"},
-  "telemetry": {:hex, :telemetry, "0.4.0", "8339bee3fa8b91cb84d14c2935f8ecf399ccd87301ad6da6b71c09553834b2ab", [:rebar3], [], "hexpm"},
-}

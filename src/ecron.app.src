@@ -4,32 +4,7 @@
     {registered, [ecron_sup, ecron_local, ecron_monitor]},
     {mod, {ecron_app, []}},
     {applications, [kernel, stdlib, telemetry]},
-    {env, [
-        %% local or utc
-        {time_zone, local},
-        {log_level, info},
-        {local_jobs, [
-            %% {JobName, CrontabSpec, {M, F, A}}
-            %% {JobName, CrontabSpec, {M, F, A}, PropListOpts}
-            %% CrontabSpec
-            %%  1. "Minute Hour DayOfMonth Month DayOfWeek"
-            %%  2. "Second Minute Hour DayOfMonth Month DayOfWeek"
-            %%  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly
-            %%  4. @every 1h2m3s
-
-            {basic, "*/15 * * * *", {io, format, ["Runs on 0, 15, 30, 45 minutes~n"]}},
-            {sec_in_spec, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
-            {hourly, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},
-            {interval, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
-            {limit_time, "*/15 * * * *",
-                {io, format, ["Runs 0, 15, 30, 45 minutes after 8:20am~n"]}, [
-                    {start_time, {8, 20, 0}}, {end_time, {23, 59, 59}}
-                ]},
-            {limit_count, "@every 1m", {io, format, ["Runs 10 times"]}, [{max_count, 10}]},
-            {limit_concurrency, "@minutely", {timer, sleep, [61000]}, [{singleton, true}]},
-            {limit_runtime_ms, "@every 1m", {timer, sleep, [2000]}, [{max_runtime_ms, 1000}]}
-        ]}
-    ]},
+    {env, []},
     {modules, []},
     {licenses, ["Apache-2.0"]},
     {links, [{"Github", "https://github.com/zhongwencool/ecron"}]}
