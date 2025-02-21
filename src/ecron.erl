@@ -158,7 +158,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 -spec create(name(), crontab_spec(), mfargs()) -> ecron_result().
 create(JobName, Spec, MFA) ->
     create(JobName, Spec, MFA, #{}).
-
+-if(?OTP_RELEASE >= 27).
 ?DOC("""
 Adds a new crontab job with specified parameters. 
 Jobs exceeding their limits are automatically removed.
@@ -226,21 +226,22 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
-If we can't find the next schedule time in the next 5 years, return 'can't find next schedule time in the next 5 years'.
+If we can not find the next schedule time in the next 5 years, return 'cant find next schedule time in the next 5 years'.
 
 ```erlang
- ecron:create(invalid_job, "* 0,13 * * *", {io, format, ["test"]}, #{
+ ecron:create(invalid_job, "* 0,13 * * *", {io, format, [test]}, #{
        start_time => {1,0,0},
        end_time => {12,0,0}
    }).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in the next 5 years",
+       #{reason => "cant find next schedule time in the next 5 years",
          spec => "* 0,13 * * *",
          start_time => {1,0,0},
          end_time => {12,0,0}}}
 ```
 
 """).
+-endif.
 -spec create(name(), crontab_spec(), mfargs(), options()) -> ecron_result().
 create(JobName, Spec, MFA, Opts = #{}) ->
     Register = maps:get(register, Opts, ?LocalJob),
@@ -285,6 +286,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 add(JobName, Spec, MFA) ->
     create(JobName, Spec, MFA, #{register => ?LocalJob}).
 
+-if(?OTP_RELEASE >= 27).
 ?DOC("""
 Same as [`add(Register, JobName, Spec, MFA, unlimited, unlimited, [])`](`add/7`).
 ## Examples
@@ -312,6 +314,7 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 <!-- tabs-close -->
 
 """).
+-endif.
 -spec add(register(), name(), crontab_spec(), mfargs()) -> ecron_result().
 add(Register, JobName, Spec, MFA) ->
     create(Register, JobName, Spec, MFA, unlimited, unlimited, []).
@@ -380,13 +383,13 @@ mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
 add_with_count(Register, JobName, Spec, MFA, RunCount) when is_integer(RunCount) ->
     create(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
 
+-if(?OTP_RELEASE >= 27).
 ?DOC("""
 Add a job into default register with start and end time.
 If you want to use the specified register, use [`add_with_time/6`](#add_with_time/6).
 ## Examples
 The job will be auto skipped if the current time is not between 04:00 and 12:00 everyday.
 <!-- tabs-open -->
-
 ### Erlang
 ```erlang
 JobName = on_hour_job,
@@ -394,7 +397,6 @@ MFA = {io, format, ["Run at 04:00-12:00 on the hour.~n", []]},
 {ok, JobName} = ecron:add_with_time(JobName, "0 1-12/1 * * *", MFA, {4, 0, 0}, {12, 0, 0}),
 ecron:statistic(JobName).
 ```
-
 ### Elixir
 ```elixir
 job_name = :on_hour_job
@@ -403,30 +405,31 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 :ecron.statistic(job_name)
 ```
 <!-- tabs-close -->
-
+    
 > #### TimeRange {: .info}
 > The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
 >
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
-
-If we can't find the next schedule time in the next 5 years, return 'can't find next schedule time in the next 5 years'.
-
+    
+If we can not find the next schedule time in the next 5 years, return `cant find next schedule time in the next 5 years`.
+    
 ```erlang
 ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in the next 5 years",
-         start => {1,0,0},
-         stop => {12,0,0},
-         spec => "* 0,13 * * *"}}
+        #{reason => "cant find next schedule time in the next 5 years",
+            start => {1,0,0},
+            stop => {12,0,0},
+            spec => "* 0,13 * * *"}}
 ```
-
 """).
+-endif.
 -spec add_with_time(name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
 add_with_time(JobName, Spec, MFA, Start, End) ->
     create(JobName, Spec, MFA, #{register => ?LocalJob, start_time => Start, end_time => End}).
 
+-if(?OTP_RELEASE >= 27).
 ?DOC("""
 Add a job into specified register with start and end time.
 If you want to use the default register, use [`add_with_time/5`](#add_with_time/5).
@@ -461,18 +464,18 @@ mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
 > For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
 > so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
 
-If we can't find the next schedule time in the next 5 years, return 'can't find next schedule time in the next 5 years'.
+If we can not find the next schedule time in the next 5 years, return `cant find next schedule time in the next 5 years`.
 
 ```erlang
 ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
 {error,invalid_time,
-       #{reason => "can't find next schedule time in the next 5 years",
+       #{reason => "cant find next schedule time in the next 5 years",
          start => {1,0,0},
          stop => {12,0,0},
          spec => "* 0,13 * * *"}}
 ```
-
 """).
+-endif.
 -spec add_with_time(register(), name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
 add_with_time(Register, JobName, Spec, MFA, Start, End) ->
@@ -812,7 +815,6 @@ statistic(Register) ->
         true ->
             ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register)
     end.
-
 ?DOC("""
 Retrieves statistics for a specific job from the specified registry.
 Use [`statistic/1`](#statistic/1) to get statistics for the default registry.
@@ -835,8 +837,8 @@ Where statistic() contains:
    status => activate,type => cron,
    next => ["2025-02-20T22:15:00+08:00"...],        
    opts => [{singleton,false},{max_count,unlimited},{max_runtime_ms,unlimited}],
-   mfa => {io,format,["Runs on 0, 15, 30, 45 minutes~n"]},
-   aborted => 0,crashed => 0, skipped => 0,
+   mfa => {io,format,['Runs on 0, 15, 30, 45 minutes~n']},
+   aborted => 0,crashed => 0,skipped => 0,
    start_time => {0,0,0},
    end_time => {23,59,59},
    run_microsecond => [],
@@ -1222,7 +1224,7 @@ next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone,
         false when NextMs - InitMs =< 5 * 365 * 24 * 3600 * 1000 ->
             next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone, InitMs);
         false ->
-            {error, "can't find next schedule time in the next 5 years"}
+            {error, "cant find next schedule time in the next 5 years"}
     end.
 
 next_schedule_datetime(DateSpec, Min, DateTime, Start, End) ->
