@@ -208,15 +208,30 @@ Telemetry is a metrics and instrumentation library for Erlang and Elixir applica
 that is based on publishing events through a common interface and attaching handlers to handle those events. 
 For more information about the library itself, see its [README](https://github.com/beam-telemetry/telemetry).
 
-Ecron logs all events by default. You can enable or disable logging via `log_level`.
+Ecron logs all events by default. 
+### Events
+|  Event      | measurements map key                       | metadata map key | log level
+| success     |run_microsecond,run_result,action_at        | name,mfa         | notice
+| activate    |action_at                                   | name,mfa         | notice
+| deactivate  |action_at                                   | name             | notice
+| delete      |action_at                                   | name             | notice
+| crashed     |run_microsecond,run_result,action_at        | name,mfa         | error
+| skipped     |job_last_pid,reason,action_at               | name,mfa         | error
+| aborted     |run_microsecond,action_at                   | name,mfa         | error
+| global,up   |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
+| global,down |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
+
+For all failed event, refer to the documentation for [`ecron:statistic/2`](https://hexdocs.pm/ecron/ecron.html#statistic/2).
+
+You can enable or disable logging via `log` configuration.
 <!-- tabs-open -->
 ### Erlang
 ```erlang
   %% sys.config
   [
    {ecron, [
-    %% none |emergency | alert | critical | error | warning | notice | info | debug
-      {log_level, notice} 
+    %% none | all | alert | error | notice 
+      {log_level, all}
    ]}
 ].
 ```
@@ -224,12 +239,17 @@ Ecron logs all events by default. You can enable or disable logging via `log_lev
 ```elixir
 # config/config.exs
 config :ecron,
-  # :none | :emergency | :alert | :critical | :error | :warning | :notice | :info | :debug
-  log_level: :notice 
+  # :none | :all | :alert | :error
+  log: :all
 ```
 <!-- tabs-close -->
-- default log_level is notice
-- disable log by `none`.
+- **all**: Logs all events.
+- **none**: Logs no events.
+- **alert**: Logs global(up/down) events.
+- **error**: Logs crashed, skipped, aborted, and global(up/down) events.
+
+> ### How ? {: .info}
+> Use [logger:set_module_level(ecron_telemetry_logger, Log)](https://www.erlang.org/doc/apps/kernel/logger.html#set_module_level/2) to overrides the primary log level of Logger for log events originating from the ecron_telemetry_logger module.
  
 ### Writing your own handler
 If you want custom logging control, you can create your own event handler. 

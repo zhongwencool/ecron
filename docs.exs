@@ -1,6 +1,6 @@
 [
   extras: [
-    "README.md",
+    {"README.md", title: "Home"},
     "./guide/crontab-spec.md",
     "./guide/implementation.md",
     "./guide/global.md",

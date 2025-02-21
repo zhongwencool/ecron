@@ -1324,7 +1324,7 @@ maybe_spawn_worker(true, Pid, Name, MFA, MaxRuntimeMs, JobTab) when is_pid(Pid) 
             telemetry:execute(
                 ?Skipped,
                 #{
-                    last_task_pid => Pid,
+                    job_last_pid => Pid,
                     reason => "last task running, use {singleton, false} for concurrent runs",
                     action_at => current_millisecond()
                 },
@@ -1366,7 +1366,6 @@ spawn_mfa(JobTab, Name, MFA, MaxRuntimeMs) ->
                     ?Aborted,
                     #{
                         run_microsecond => MaxRuntimeMs,
-                        run_result => aborted,
                         action_at => current_millisecond()
                     },
                     #{

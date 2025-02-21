@@ -7,6 +7,7 @@
     {env, [
         %% local or utc
         {time_zone, local},
+        {log_level, info},
         {local_jobs, [
             %% {JobName, CrontabSpec, {M, F, A}}
             %% {JobName, CrontabSpec, {M, F, A}, PropListOpts}

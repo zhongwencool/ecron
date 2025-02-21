@@ -7,26 +7,35 @@
 -define(Events, [
     ?Success, ?Skipped, ?Aborted, ?Crashed, ?Activate, ?Deactivate, ?Delete, ?GlobalUp, ?GlobalDown
 ]).
+-define(ACTION_LEVEL, #{
+    success => notice,
+    activate => notice,
+    deactivate => notice,
+    delete => notice,
+    skipped => error,
+    aborted => error,
+    crashed => error
+}).
 %% API
 -export([attach/0, detach/0]).
--define(TELEMETRY_HANDLE, ecron_telemetry_logger).
--define(LEVELS, [emergency, alert, critical, error, warning, notice, info, debug]).
 
 attach() ->
-    LogLevel = application:get_env(ecron, log_level, notice),
-    case lists:member(LogLevel, ?LEVELS) of
-        true -> telemetry:attach_many(?TELEMETRY_HANDLE, ?Events, fun handle_event/4, LogLevel);
-        false -> ok
-    end.
+    Level = application:get_env(ecron, log_level, all),
+    logger:set_module_level([?MODULE], Level),
+    Function = fun handle_event/4,
+    Config = undefined,
+    telemetry:attach_many(?MODULE, ?Events, Function, Config).
 
 detach() ->
-    telemetry:detach(?TELEMETRY_HANDLE).
+    logger:unset_module_level([?MODULE]),
+    telemetry:detach(?MODULE).
 
-handle_event([ecron, Action], Event, #{name := JobName}, Level) ->
+handle_event([ecron, Action], Event, #{name := JobName}, _Config) ->
+    Level = maps:get(Action, ?ACTION_LEVEL),
     ?LOG(Level, Event#{action => Action, name => JobName});
-handle_event([ecron, global, Action], Event, Meta, Level) ->
+handle_event([ecron, global, Action], Event, Meta, _Config) ->
     Entry = maps:merge(Event, Meta),
-    ?LOG(Level, Entry#{action => global_action(Action)}).
+    ?LOG(alert, Entry#{action => global_action(Action)}).
 
 global_action(down) -> global_down;
 global_action(up) -> global_up.
