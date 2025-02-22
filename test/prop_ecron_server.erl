@@ -41,6 +41,7 @@ prop_server() ->
         begin
             application:set_env(ecron, local_jobs, []),
             application:set_env(ecron, global_jobs, []),
+            application:set_env(ecron, log_level, none),
             application:ensure_all_started(ecron),
             ecron:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),

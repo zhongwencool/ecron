@@ -30,6 +30,7 @@ prop_cron_apply_ok() ->
                 {good_yearly, "@yearly", {io, format, ["Yearly~n"]}}
             ]),
             application:set_env(ecron, adjusting_time_second, 1),
+            application:set_env(ecron, log_level, none),
             application:ensure_all_started(ecron),
             MFA =
                 case FuncType of

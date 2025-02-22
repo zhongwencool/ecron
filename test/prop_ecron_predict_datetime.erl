@@ -30,21 +30,35 @@ prop_predict_cron_datetime() ->
                     start_time => Start,
                     end_time => End
                 },
-                {ok, List} = ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now),
                 NowDateTime = calendar:system_time_to_local_time(Now, millisecond),
                 ExpectList = predict_cron_datetime(
                     Start, End, NewCrontabSpec, {local, NowDateTime}, 500, []
                 ),
-                ?WHENFAIL(
-                    io:format("Predict ~p\n ~p\ncrashed: ~p~n~p~n", [
-                        SpecStr,
-                        NewSpec,
-                        Start,
-                        {activate, NewSpec, Start, End, 500, local}
-                    ]),
-                    ExpectList =:= List andalso
-                        prop_ecron:check_cron_result(NewCrontabSpec, Start, End, List)
-                )
+                case ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now) of
+                    {ok, List} ->
+                        ?WHENFAIL(
+                            io:format("Predict ~p\n ~p\ncrashed: ~p~n~p~n", [
+                                SpecStr,
+                                NewSpec,
+                                Start,
+                                {activate, NewSpec, Start, End, 500, local}
+                            ]),
+                            ExpectList =:= List andalso
+                                prop_ecron:check_cron_result(NewCrontabSpec, Start, End, List)
+                        );
+                    {error, "cant find next schedule time in the next 5 years"} ->
+                        [FirstDateTime | _] = ExpectList,
+                        FirstDateSec = calender:rfc3339_to_system_time(FirstDateTime),
+                        ?WHENFAIL(
+                            io:format("Predict ~p\n ~p\ncrashed: ~p~n~p~n", [
+                                SpecStr,
+                                NewSpec,
+                                Start,
+                                {activate, NewSpec, Start, End, 500, local}
+                            ]),
+                            FirstDateSec >= Now div 1000 + 5 * 3600 * 24 * 3600
+                        )
+                end
             end
         )
     ).
