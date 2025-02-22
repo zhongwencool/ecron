@@ -9,7 +9,7 @@
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
 
-prop_predict_cron_datetime(doc) -> "predict cron datetime failed";
+prop_predict_cron_datetime(doc) -> "predict cron datetime crashed";
 prop_predict_cron_datetime(opts) -> [{numtests, 8000}].
 prop_predict_cron_datetime() ->
     ?FORALL(
@@ -30,26 +30,40 @@ prop_predict_cron_datetime() ->
                     start_time => Start,
                     end_time => End
                 },
-                List = ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now),
                 NowDateTime = calendar:system_time_to_local_time(Now, millisecond),
                 ExpectList = predict_cron_datetime(
                     Start, End, NewCrontabSpec, {local, NowDateTime}, 500, []
                 ),
-                ?WHENFAIL(
-                    io:format("Predict ~p\n ~p\nFailed: ~p~n~p~n", [
-                        SpecStr,
-                        NewSpec,
-                        Start,
-                        {activate, NewSpec, Start, End, 500, local}
-                    ]),
-                    ExpectList =:= List andalso
-                        prop_ecron:check_cron_result(NewCrontabSpec, Start, End, List)
-                )
+                case ecron:predict_datetime(activate, NewSpec, Start, End, 500, local, Now) of
+                    {ok, List} ->
+                        ?WHENFAIL(
+                            io:format("Predict ~p\n ~p\ncrashed: ~p~n~p~n", [
+                                SpecStr,
+                                NewSpec,
+                                Start,
+                                {activate, NewSpec, Start, End, 500, local}
+                            ]),
+                            ExpectList =:= List andalso
+                                prop_ecron:check_cron_result(NewCrontabSpec, Start, End, List)
+                        );
+                    {error, "cant find next schedule time in the next 5 years"} ->
+                        [FirstDateTime | _] = ExpectList,
+                        FirstDateSec = calender:rfc3339_to_system_time(FirstDateTime),
+                        ?WHENFAIL(
+                            io:format("Predict ~p\n ~p\ncrashed: ~p~n~p~n", [
+                                SpecStr,
+                                NewSpec,
+                                Start,
+                                {activate, NewSpec, Start, End, 500, local}
+                            ]),
+                            FirstDateSec >= Now div 1000 + 5 * 3600 * 24 * 3600
+                        )
+                end
             end
         )
     ).
 
-prop_predict_every_datetime(doc) -> "predict every datetime failed";
+prop_predict_every_datetime(doc) -> "predict every datetime crashed";
 prop_predict_every_datetime(opts) -> [{numtests, 3000}].
 prop_predict_every_datetime() ->
     ?FORALL(
@@ -66,9 +80,9 @@ prop_predict_every_datetime() ->
                 start_time => Start,
                 end_time => End
             },
-            List = ecron:predict_datetime(activate, NewSpec, Start, End, 10, utc, Now),
+            {ok, List} = ecron:predict_datetime(activate, NewSpec, Start, End, 10, utc, Now),
             ?WHENFAIL(
-                io:format("Predict Failed: ~p ~p~n", [NewSpec, List]),
+                io:format("Predict crashed: ~p ~p~n", [NewSpec, List]),
                 prop_ecron:check_every_result(Second, Start, End, utc, List)
             )
         end

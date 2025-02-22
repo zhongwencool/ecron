@@ -13,11 +13,12 @@
 
 -export([echo/2]).
 -export([long_echo/3]).
+-export([store/0]).
 
 %%%%%%%%%%%%%%%%%%
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
-prop_cron_apply_ok(doc) -> "add cron failed";
+prop_cron_apply_ok(doc) -> "add cron crashed";
 prop_cron_apply_ok(opts) -> [{numtests, 20}].
 prop_cron_apply_ok() ->
     ?FORALL(
@@ -29,6 +30,7 @@ prop_cron_apply_ok() ->
                 {good_yearly, "@yearly", {io, format, ["Yearly~n"]}}
             ]),
             application:set_env(ecron, adjusting_time_second, 1),
+            application:set_env(ecron, log_level, none),
             application:ensure_all_started(ecron),
             MFA =
                 case FuncType of
@@ -36,7 +38,7 @@ prop_cron_apply_ok() ->
                     func -> {fun echo/2, [self(), Request]};
                     wrong -> {?MODULE, echo, [undefined, Request]}
                 end,
-            {ok, Name} = ecron:add(Name, "*/2 * * * * *", MFA),
+            {ok, Name} = ecron:create(Name, "*/2 * * * * *", MFA),
             case FuncType =/= wrong of
                 true ->
                     Res = check_normal_response(Request, 2, 2),
@@ -53,7 +55,7 @@ prop_cron_apply_ok() ->
         end
     ).
 
-prop_cron_apply_error(doc) -> "add cron failed";
+prop_cron_apply_error(doc) -> "add cron crashed";
 prop_cron_apply_error(opts) -> [{numtests, 10}].
 prop_cron_apply_error() ->
     ?FORALL(
@@ -65,8 +67,8 @@ prop_cron_apply_error() ->
             error_logger:tty(false),
             OkMFA = {?MODULE, long_echo, [650, self(), ?FUNCTION_NAME]},
             WrongMFA = {?MODULE, echo, [wrong, Request]},
-            {ok, OkName} = ecron:add({Name, ?FUNCTION_NAME}, "@every 1s", OkMFA),
-            {ok, WrongName} = ecron:add(Name, "@every 1s", WrongMFA),
+            {ok, OkName} = ecron:create({Name, ?FUNCTION_NAME}, "@every 1s", OkMFA),
+            {ok, WrongName} = ecron:create(Name, "@every 1s", WrongMFA),
             timer:sleep(1900),
             {ok, #{
                 crontab := CronSpec,
@@ -74,12 +76,12 @@ prop_cron_apply_error() ->
                 end_time := {23, 59, 59},
                 mfa := RMFA,
                 name := RName,
-                failed := Failed,
+                crashed := Crashed,
                 ok := Ok,
                 results := Result
             }} = ecron:statistic(ecron_local, WrongName),
             {ok, #{
-                failed := Failed1,
+                crashed := Crashed1,
                 ok := Ok1
             }} = ecron:statistic(ecron_local, OkName),
             ok = ecron:delete(WrongName),
@@ -90,8 +92,8 @@ prop_cron_apply_error() ->
                 WrongMFA =:= RMFA andalso
                 Ok =:= 0 andalso
                 Ok1 =:= 1 andalso
-                Failed =:= length(Result) andalso
-                Failed1 =:= 0 andalso
+                Crashed =:= length(Result) andalso
+                Crashed1 =:= 0 andalso
                 lists:all(
                     fun(R) -> {element(1, R), element(2, R)} =:= {error, function_clause} end,
                     Result
@@ -130,7 +132,7 @@ prop_restart_server() ->
                 {ecron_test_2, "@yearly", {io, format, ["Yearly~n"]}, unlimited, unlimited}
             ]),
             application:ensure_all_started(ecron),
-            {ok, Name} = ecron:add(Name, "@yearly", {io, format, ["Yearly~n"]}),
+            {ok, Name} = ecron:create(Name, "@yearly", {io, format, ["Yearly~n"]}),
             Res1 = ecron:statistic(ecron_local, Name),
             Pid = erlang:whereis(?LocalJob),
             erlang:exit(Pid, kill),
@@ -159,13 +161,12 @@ prop_singleton() ->
                     {singleton, Singleton}
                 ]}
             ]),
+            application:set_env(ecron, log_level, none),
             application:set_env(ecron, adjusting_time_second, 1),
             application:stop(ecron),
             application:start(ecron),
-            {ok, Name} = ecron:add(
-                Name, "@every 1s", {timer, sleep, [1100]}, unlimited, unlimited, [
-                    {singleton, Singleton}
-                ]
+            {ok, Name} = ecron:create(
+                Name, "@every 1s", {timer, sleep, [1100]}, #{singleton => Singleton}
             ),
             timer:sleep(4200),
             {ok, Res} = ecron:statistic(ecron_local, Name),
@@ -173,20 +174,22 @@ prop_singleton() ->
                 start_time := {0, 0, 0},
                 end_time := {23, 59, 59},
                 status := activate,
-                failed := 0,
+                crashed := 0,
+                skipped := Skipped,
                 ok := Ok,
                 results := Results,
                 run_microsecond := RunMs
             } = Res,
             ecron:delete(Name),
-            Num =
+            {Num, ExpectSkip} =
                 case Singleton of
-                    true -> 2;
-                    false -> 3
+                    true -> {2, 2};
+                    false -> {3, 0}
                 end,
             application:set_env(ecron, adjusting_time_second, 100000),
             error_logger:tty(true),
-            Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num
+            Ok =:= Num andalso length(Results) =:= Num andalso length(RunMs) =:= Num andalso
+                ExpectSkip =:= Skipped
         end
     ).
 
@@ -227,12 +230,18 @@ prop_ecron_send_interval() ->
             Target =
                 case NeedReg of
                     false ->
-                        spawn(fun store/0);
+                        spawn(fun ?MODULE:store/0);
                     true ->
-                        Pid = spawn(fun store/0),
+                        Pid = spawn(fun ?MODULE:store/0),
                         true = erlang:register(Name, Pid),
                         Name
                 end,
+            {error, invalid_opts, _} = ecron:send_interval(
+                "* * * * * *",
+                Target,
+                {add, self(), Message},
+                #{max_count => test}
+            ),
             {ok, Job} = ecron:send_interval("* * * * * *", Target, {add, self(), Message}),
             Res1 =
                 receive
@@ -254,7 +263,7 @@ prop_ecron_send_interval() ->
                 start_time := {0, 0, 0},
                 end_time := {23, 59, 59},
                 status := activate,
-                failed := 0,
+                crashed := 0,
                 ok := Ok,
                 results := Results,
                 run_microsecond := RunMs
@@ -267,9 +276,7 @@ prop_ecron_send_interval() ->
                 end,
             timer:sleep(160),
             {error, not_found} = ecron:statistic(ecron_local, Job),
-            {ok, Job1} = ecron:send_interval(
-                ecron_local, make_ref(), "0 1 1 * * *", Message, unlimited, unlimited, []
-            ),
+            {ok, Job1} = ecron:send_interval("0 1 1 * * *", Message),
             error_logger:tty(true),
             Res1 =:= Res2 andalso Res2 =:= Res3 andalso Res1 =:= ok andalso Res4 =:= ok andalso
                 length(Results) =:= Ok andalso length(RunMs) =:= Ok andalso Job1 =/= Job
@@ -284,7 +291,14 @@ prop_add_with_count() ->
         term(),
         begin
             application:ensure_all_started(ecron),
-            {ok, _Name1} = ecron:add_with_count("@every 1s", {erlang, send, [self(), test]}, 2),
+            {ok, _Name1} = ecron:create(
+                make_ref(),
+                "@every 1s",
+                {erlang, send, [self(), test]},
+                #{
+                    max_count => 2
+                }
+            ),
             Res1 =
                 receive
                     test -> ok

@@ -10,24 +10,43 @@
 -export([parse_valid_opts/1]).
 -export([valid_time/4]).
 
-%% @private
-
-valid_time(cron, {SH, SM, SS}, {EH, EM, ES}, CronTab) ->
+valid_time(cron, {SH, SM, SS} = StartTime, {EH, EM, ES} = EndTime, CronTab) ->
     Start = SH * 3600 + SM * 60 + SS,
     End = EH * 3600 + EM * 60 + ES,
     case End > Start of
         false ->
-            false;
+            {error, "Start time must be less than the maximum value in the spec"};
         true ->
             #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = CronTab,
-            Hour = parse_max(23, HourSpec),
-            Minute = parse_max(59, MinuteSpec),
-            Second = parse_max(59, SecondSpec),
-            Spec = Hour * 3600 + Minute * 60 + Second,
-            Spec >= Start andalso Spec =< End
+            MaxHour = parse_max(23, HourSpec),
+            MaxMinute = parse_max(59, MinuteSpec),
+            MaxSecond = parse_max(59, SecondSpec),
+            MaxSpec = MaxHour * 3600 + MaxMinute * 60 + MaxSecond,
+            case MaxSpec >= Start of
+                true ->
+                    MinHour = parse_min(0, HourSpec),
+                    MinMinute = parse_min(0, MinuteSpec),
+                    MinSecond = parse_min(0, SecondSpec),
+                    MinSpec = MinHour * 3600 + MinMinute * 60 + MinSecond,
+                    case MinSpec =< End of
+                        true ->
+                            Job = #{type => cron, crontab => CronTab},
+                            case ecron:predict_datetime(Job, 1, StartTime, EndTime) of
+                                {ok, [_]} -> ok;
+                                Error -> Error
+                            end;
+                        false ->
+                            {error, "End time must be greater than the minimum value in the spec"}
+                    end;
+                false ->
+                    {error, "Start time must be less than the maximum value in the spec"}
+            end
     end;
 valid_time(every, {SH, SM, SS}, {EH, EM, ES}, _CronTab) ->
-    ((EH - SH) * 3600 + (EM - SM) * 60 + (ES - SS)) >= 0.
+    case ((EH - SH) * 3600 + (EM - SM) * 60 + (ES - SS)) >= 0 of
+        true -> ok;
+        false -> {error, "End time must be greater than the start time"}
+    end.
 
 parse_max(Max, '*') ->
     Max;
@@ -37,7 +56,10 @@ parse_max(_DefaultMax, List) ->
         Max -> Max
     end.
 
-% Run once a year, midnight, Jan. 1st
+parse_min(Min, '*') -> Min;
+parse_min(_DefaultMin, [{Min, _} | _]) -> Min;
+parse_min(_DefaultMin, [Min | _]) -> Min.
+
 parse_spec("@yearly") ->
     parse_spec("0 0 0 1 1 *");
 % Same as @yearly
@@ -334,6 +356,10 @@ parse_crontab([{Name, Spec, {_M, _F, _A} = MFA} | Jobs], Acc) ->
     parse_crontab([{Name, Spec, MFA, unlimited, unlimited, []} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End} | Jobs], Acc) ->
     parse_crontab([{Name, Spec, MFA, Start, End, []} | Jobs], Acc);
+parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Opts} | Jobs], Acc) when is_list(Opts) ->
+    Start = proplists:get_value(start_time, Opts, unlimited),
+    End = proplists:get_value(end_time, Opts, unlimited),
+    parse_crontab([{Name, Spec, MFA, Start, End, Opts} | Jobs], Acc);
 parse_crontab([{Name, Spec, {_M, _F, _A} = MFA, Start, End, Opts} | Jobs], Acc) ->
     case parse_job(Name, Spec, MFA, Start, End, Opts) of
         {ok, Job} ->
@@ -360,12 +386,17 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
                         start_time => StartTime,
                         end_time => EndTime
                     },
-                    {ok, #job{
-                        name = JobName,
-                        status = activate,
-                        job = Job,
-                        opts = parse_valid_opts(Opts)
-                    }};
+                    case parse_valid_opts(Opts) of
+                        {ok, ValidOpts} ->
+                            {ok, #job{
+                                name = JobName,
+                                status = activate,
+                                job = Job,
+                                opts = ValidOpts
+                            }};
+                        ErrOpts ->
+                            ErrOpts
+                    end;
                 ErrParse ->
                     ErrParse
             end;
@@ -374,9 +405,23 @@ parse_job(JobName, Spec, MFA, Start, End, Opts) ->
     end.
 
 parse_valid_opts(Opts) ->
-    Singleton = proplists:get_value(singleton, Opts, true),
+    Singleton = proplists:get_value(singleton, Opts, false),
     MaxCount = proplists:get_value(max_count, Opts, unlimited),
-    [{singleton, Singleton}, {max_count, MaxCount}].
+    MaxRuntimeMs = proplists:get_value(max_runtime_ms, Opts, unlimited),
+    case
+        is_boolean(Singleton) andalso
+            (is_integer(MaxCount) orelse MaxCount =:= unlimited) andalso
+            (is_integer(MaxRuntimeMs) orelse MaxRuntimeMs =:= unlimited)
+    of
+        true ->
+            {ok, [
+                {singleton, Singleton},
+                {max_count, MaxCount},
+                {max_runtime_ms, MaxRuntimeMs}
+            ]};
+        false ->
+            {error, invalid_opts, Opts}
+    end.
 
 parse_start_end_time(Start, End) ->
     case {Start, End} of

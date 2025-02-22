@@ -41,6 +41,7 @@ prop_server() ->
         begin
             application:set_env(ecron, local_jobs, []),
             application:set_env(ecron, global_jobs, []),
+            application:set_env(ecron, log_level, none),
             application:ensure_all_started(ecron),
             ecron:clear(),
             {History, State, Result} = run_commands(?MODULE, Cmds),
@@ -261,7 +262,7 @@ check_add_with_limit([_Spec, _MFA | _], {ok, _Name}) ->
 check_add_with_limit([Spec, _MFA, {StartTime, EndTime}], {error, invalid_time, _}) ->
     not is_valid_time(Spec, StartTime, EndTime).
 
-is_valid_time(Spec, {SH, SM, SS}, {EH, EM, ES}) ->
+is_valid_time(Spec, {SH, SM, SS} = StartTime, {EH, EM, ES} = EndTime) ->
     Start = SH * 3600 + SM * 60 + SS,
     End = EH * 3600 + EM * 60 + ES,
     case End > Start of
@@ -271,11 +272,27 @@ is_valid_time(Spec, {SH, SM, SS}, {EH, EM, ES}) ->
             case ecron_spec:parse_spec(Spec) of
                 {ok, cron, Job} ->
                     #{hour := HourSpec, minute := MinuteSpec, second := SecondSpec} = Job,
-                    Hour = parse_max(23, HourSpec),
-                    Minute = parse_max(59, MinuteSpec),
-                    Second = parse_max(59, SecondSpec),
-                    SpecTime = Hour * 3600 + Minute * 60 + Second,
-                    SpecTime >= Start andalso SpecTime =< End;
+                    MaxHour = parse_max(23, HourSpec),
+                    MaxMinute = parse_max(59, MinuteSpec),
+                    MaxSecond = parse_max(59, SecondSpec),
+                    MaxSpecTime = MaxHour * 3600 + MaxMinute * 60 + MaxSecond,
+                    MinHour = parse_min(0, HourSpec),
+                    MinMinute = parse_min(0, MinuteSpec),
+                    MinSecond = parse_min(0, SecondSpec),
+                    MinSpecTime = MinHour * 3600 + MinMinute * 60 + MinSecond,
+                    case MaxSpecTime >= Start andalso MinSpecTime =< End of
+                        false ->
+                            false;
+                        true ->
+                            case
+                                ecron:predict_datetime(
+                                    #{type => cron, crontab => Job}, 1, StartTime, EndTime
+                                )
+                            of
+                                {ok, [_]} -> true;
+                                _ -> false
+                            end
+                    end;
                 _ ->
                     true
             end
@@ -289,20 +306,27 @@ parse_max(_DefaultMax, List) ->
         Max -> Max
     end.
 
-add_cron_new(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
-add_cron_existing(Name, Spec, MFA) -> ecron:add(Name, Spec, MFA).
-add_cron_new(Name, Spec, MFA, {Start, End}) -> ecron:add_with_time(Name, Spec, MFA, Start, End).
+parse_min(Min, '*') -> Min;
+parse_min(_DefaultMin, [{Min, _} | _]) -> Min;
+parse_min(_DefaultMin, [Min | _]) -> Min.
+
+add_cron_new(Name, Spec, MFA) -> ecron:create(Name, Spec, MFA).
+add_cron_existing(Name, Spec, MFA) -> ecron:create(Name, Spec, MFA).
+add_cron_new(Name, Spec, MFA, {Start, End}) ->
+    ecron:create(Name, Spec, MFA, #{start_time => Start, end_time => End}).
 add_cron_existing(Name, Spec, MFA, {Start, End}) ->
-    ecron:add_with_time(Name, Spec, MFA, Start, End).
+    ecron:create(Name, Spec, MFA, #{start_time => Start, end_time => End}).
 
-add_with_count(Spec, MFA, Count) -> ecron:add_with_count(Spec, MFA, Count).
+add_with_count(Spec, MFA, Count) -> ecron:create(make_ref(), Spec, MFA, #{max_count => Count}).
 add_with_datetime(Spec, MFA, {Start, End}) ->
-    ecron:add_with_time(make_ref(), Spec, MFA, Start, End).
+    ecron:create(make_ref(), Spec, MFA, #{start_time => Start, end_time => End}).
 
-add_every_new(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
-add_every_existing(Name, Ms, MFA) -> ecron:add(Name, Ms, MFA).
-add_every_new(Name, Ms, MFA, {Start, End}) -> ecron:add_with_time(Name, Ms, MFA, Start, End).
-add_every_existing(Name, Ms, MFA, {Start, End}) -> ecron:add_with_time(Name, Ms, MFA, Start, End).
+add_every_new(Name, Ms, MFA) -> ecron:create(Name, Ms, MFA).
+add_every_existing(Name, Ms, MFA) -> ecron:create(Name, Ms, MFA).
+add_every_new(Name, Ms, MFA, {Start, End}) ->
+    ecron:create(Name, Ms, MFA, #{start_time => Start, end_time => End}).
+add_every_existing(Name, Ms, MFA, {Start, End}) ->
+    ecron:create(Name, Ms, MFA, #{start_time => Start, end_time => End}).
 
 delete_existing(Name) -> ecron:delete(Name).
 delete_unknown(Name) -> ecron:delete(Name).
@@ -327,7 +351,7 @@ valid_statistic(State, Name, [Res]) ->
                 crontab := Cron,
                 start_time := StartTime,
                 end_time := EndTime,
-                failed := Failed,
+                crashed := Crashed,
                 next := Next,
                 ok := Ok,
                 mfa := MFA,
@@ -336,7 +360,7 @@ valid_statistic(State, Name, [Res]) ->
             } = Res,
             case
                 Cron =:= CrontabSpec andalso
-                    Failed =:= 0 andalso
+                    Crashed =:= 0 andalso
                     Ok >= 0 andalso
                     MFAExpect =:= MFA andalso
                     length(Results) =< 20 andalso

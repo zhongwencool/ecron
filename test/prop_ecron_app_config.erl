@@ -4,7 +4,7 @@
 -export([prop_application_ok_config/0, prop_application_ok_config/1]).
 -export([prop_application_error_config/0, prop_application_error_config/1]).
 
-prop_application_ok_config(doc) -> "ecron application load normal config failed";
+prop_application_ok_config(doc) -> "ecron application load normal config crashed";
 prop_application_ok_config(opts) -> [{numtests, 100}].
 prop_application_ok_config() ->
     ?FORALL(
@@ -37,14 +37,14 @@ prop_application_ok_config() ->
 
                 error_logger:tty(true),
                 ?WHENFAIL(
-                    io:format("Start ~s Failed: ~p\n", [SpecStr, Result]),
+                    io:format("Start ~s crashed: ~p\n", [SpecStr, Result]),
                     Result =:= ok
                 )
             end
         )
     ).
 
-prop_application_error_config(doc) -> "ecron application load error config failed";
+prop_application_error_config(doc) -> "ecron application load error config crashed";
 prop_application_error_config(opts) -> [{numtests, 800}].
 prop_application_error_config() ->
     ?FORALL(

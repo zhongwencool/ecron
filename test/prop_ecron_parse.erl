@@ -16,7 +16,7 @@
 %%%%%%%%%%%%%%%%%%
 %%% Properties %%%
 %%%%%%%%%%%%%%%%%%
-prop_zip(doc) -> "ecron:zip/1 failed";
+prop_zip(doc) -> "ecron:zip/1 crashed";
 prop_zip(opts) -> [{numtests, 4000}].
 prop_zip() ->
     ?FORALL(
@@ -25,7 +25,7 @@ prop_zip() ->
         prop_ecron:unzip(ecron_spec:zip(List)) =:= List
     ).
 
-prop_max_day_of_months(doc) -> "ecron:get_max_day_of_months/1 failed";
+prop_max_day_of_months(doc) -> "ecron:get_max_day_of_months/1 crashed";
 prop_max_day_of_months(opts) -> [{numtests, 1000}].
 prop_max_day_of_months() ->
     ?FORALL(
@@ -40,7 +40,7 @@ prop_max_day_of_months() ->
     ).
 
 prop_spec_extend(doc) ->
-    "ecron_spec:parse_spec(\"second minute hour day_of_month month day_of_week\") failed";
+    "ecron_spec:parse_spec(\"second minute hour day_of_month month day_of_week\") crashed";
 prop_spec_extend(opts) ->
     [{numtests, 4000}].
 prop_spec_extend() ->
@@ -56,7 +56,7 @@ prop_spec_extend() ->
                 ),
                 {ok, cron, Expect} = spec_to_extend(Spec),
                 ?WHENFAIL(
-                    io:format("Parse ~s \nFailed: ~p\n  ~p\n", [SpecStr, Expect, Actual]),
+                    io:format("Parse ~s \ncrashed: ~p\n  ~p\n", [SpecStr, Expect, Actual]),
                     Expect =:= Actual andalso length(Next) =:= 10
                 )
             end
@@ -64,7 +64,7 @@ prop_spec_extend() ->
     ).
 
 prop_spec_standard(doc) ->
-    "ecron_spec:parse_spec(\"minute hour day_of_month month day_of_week\") failed";
+    "ecron_spec:parse_spec(\"minute hour day_of_month month day_of_week\") crashed";
 prop_spec_standard(opts) ->
     [{numtests, 4000}].
 prop_spec_standard() ->
@@ -78,7 +78,7 @@ prop_spec_standard() ->
                 Actual = ecron_spec:parse_spec(SpecStr),
                 Expect = spec_to_extend(Spec),
                 ?WHENFAIL(
-                    io:format("Parse ~s Failed: ~p\n  ~p\n", [SpecStr, Expect, Actual]),
+                    io:format("Parse ~s crashed: ~p\n  ~p\n", [SpecStr, Expect, Actual]),
                     Expect =:= Actual
                 )
             end
@@ -89,7 +89,7 @@ prop_spec_standard() ->
     "@yearly", "@annually", "@monthly", "@weekly", "@midnight", "@daily", "@hourly", "@minutely"
 ]).
 
-prop_spec_predefined(doc) -> "ecron_spec:parse_spec/1 predefined spec failed";
+prop_spec_predefined(doc) -> "ecron_spec:parse_spec/1 predefined spec crashed";
 prop_spec_predefined(opts) -> [{numtests, 2000}].
 prop_spec_predefined() ->
     ?FORALL(
@@ -99,13 +99,13 @@ prop_spec_predefined() ->
             Actual = ecron_spec:parse_spec(Spec),
             Expect = spec_to_extend(Spec),
             ?WHENFAIL(
-                io:format("Parse ~s SpecFailed: ~p\n  ~p\n", [Spec, Expect, Actual]),
+                io:format("Parse ~s Speccrashed: ~p\n  ~p\n", [Spec, Expect, Actual]),
                 Expect =:= Actual
             )
         end
     ).
 
-prop_spec_every(doc) -> "ecron_spec:parse_spec/1 @every 1d2h3m4s spec failed";
+prop_spec_every(doc) -> "ecron_spec:parse_spec/1 @every 1d2h3m4s spec crashed";
 prop_spec_every(opts) -> [{numtests, 4000}].
 prop_spec_every() ->
     ?FORALL(
@@ -119,14 +119,14 @@ prop_spec_every() ->
                 Actual = ecron_spec:parse_spec(SpecStr),
                 Expect = {ok, every, every_spec_to_second(Spec)},
                 ?WHENFAIL(
-                    io:format("Parse ~s Failed: ~p\n~p\n", [SpecStr, Expect, Actual]),
+                    io:format("Parse ~s crashed: ~p\n~p\n", [SpecStr, Expect, Actual]),
                     Expect =:= Actual
                 )
             end
         )
     ).
 
-prop_spec_every_error(doc) -> "ecron_spec:parse_spec/1 @every 1d2h3m4s spec failed";
+prop_spec_every_error(doc) -> "ecron_spec:parse_spec/1 @every 1d2h3m4s spec crashed";
 prop_spec_every_error(opts) -> [{numtests, 4000}].
 prop_spec_every_error() ->
     ?FORALL(
@@ -137,13 +137,13 @@ prop_spec_every_error() ->
             SpecStr = lists:flatten(io_lib:format("@every " ++ Format, Args)),
             {error, Second, Reason} = ecron:parse_spec(SpecStr, 10),
             ?WHENFAIL(
-                io:format("Parse ~s Failed: ~p\n~p\n", [SpecStr, Second, Reason]),
+                io:format("Parse ~s crashed: ~p\n~p\n", [SpecStr, Second, Reason]),
                 lists:member(Second, [second, invalid_spec])
             )
         end
     ).
 
-prop_maybe_error_spec(doc) -> "ecron_spec:parse_spec/1 error spec failed";
+prop_maybe_error_spec(doc) -> "ecron_spec:parse_spec/1 error spec crashed";
 prop_maybe_error_spec(opts) -> [{numtests, 4000}].
 prop_maybe_error_spec() ->
     ?FORALL(
@@ -155,13 +155,17 @@ prop_maybe_error_spec() ->
             case ecron:parse_spec(SpecStr, 10) of
                 {ok, #{type := cron, crontab := Ecron}} ->
                     ?WHENFAIL(
-                        io:format("Parse ~s Failed: ~p\n  ~p\n", [SpecStr, Expect, Ecron]),
+                        io:format("Parse ~s crashed: ~p\n  ~p\n", [SpecStr, Expect, Ecron]),
                         Expect =:= Ecron
                     );
                 {error, Field, Reason} ->
                     ?WHENFAIL(
-                        io:format("Parse ~s Failed: ~p\n  ~p\n", [SpecStr, Expect, {Field, Reason}]),
-                        check_failed_field(Field, prop_ecron:unzip(maps:get(Field, Expect)))
+                        io:format("Parse ~s crashed: ~p\n  ~p\n", [
+                            SpecStr,
+                            Expect,
+                            {Field, Reason}
+                        ]),
+                        check_crashed_field(Field, prop_ecron:unzip(maps:get(Field, Expect)))
                     )
             end
         end
@@ -171,7 +175,7 @@ prop_maybe_error_spec() ->
     invalid_time, invalid_spec, month, day_of_month, day_of_week, hour, minute, second, no_change
 ]).
 
-prop_map_error_spec(doc) -> "parse error map spec failed";
+prop_map_error_spec(doc) -> "parse error map spec crashed";
 prop_map_error_spec(opts) -> [{numtests, 5000}].
 prop_map_error_spec() ->
     ?FORALL(
@@ -198,21 +202,21 @@ prop_map_error_spec() ->
             case ecron_spec:parse_spec(SpecMap) of
                 {ok, cron, Ecron} ->
                     ?WHENFAIL(
-                        io:format("Parse ~p\n Failed: ~p\n  ~p\n", [SpecMap, NewExpect, Ecron]),
+                        io:format("Parse ~p\n crashed: ~p\n  ~p\n", [SpecMap, NewExpect, Ecron]),
                         NewExpect =:= Ecron
                     );
                 {error, Field, Reason} ->
                     ?WHENFAIL(
-                        io:format("Parse ~p\n Failed: ~p\n  ~p\n", [
+                        io:format("Parse ~p\n crashed: ~p\n  ~p\n", [
                             SpecMap, NewExpect, {Field, Reason}
                         ]),
-                        check_failed_field(Field, prop_ecron:unzip(maps:get(Field, NewExpect, [])))
+                        check_crashed_field(Field, prop_ecron:unzip(maps:get(Field, NewExpect, [])))
                     )
             end
         end
     ).
 
-prop_error_format(doc) -> "ecron_spec:parse_spec/1 spec wrong format failed";
+prop_error_format(doc) -> "ecron_spec:parse_spec/1 spec wrong format crashed";
 prop_error_format(opts) -> [{numtests, 2000}].
 prop_error_format() ->
     ?FORALL(
@@ -222,7 +226,7 @@ prop_error_format() ->
             SpecStr = spec_to_str(Spec, Rand, Extra),
             {error, Field, Reason} = ecron:add(error_spec, SpecStr, {erlang, datetime, []}),
             ?WHENFAIL(
-                io:format("Parse ~s Failed: \n  ~p\n", [SpecStr, {Field, Reason}]),
+                io:format("Parse ~s crashed: \n  ~p\n", [SpecStr, {Field, Reason}]),
                 lists:member(Field, ?Fields)
             )
         end
@@ -349,19 +353,19 @@ spec_to_extend([Second, Minute, Hour, Day, Month, Week]) ->
         day_of_week => prop_ecron:field_to_extend(Week)
     }}.
 
-check_failed_field(second, List) ->
+check_crashed_field(second, List) ->
     not lists:all(fun(L) -> L >= 0 andalso L =< 59 end, List);
-check_failed_field(minute, List) ->
+check_crashed_field(minute, List) ->
     not lists:all(fun(L) -> L >= 0 andalso L =< 59 end, List);
-check_failed_field(hour, List) ->
+check_crashed_field(hour, List) ->
     not lists:all(fun(L) -> L >= 0 andalso L =< 23 end, List);
-check_failed_field(day_of_month, List) ->
+check_crashed_field(day_of_month, List) ->
     not lists:all(fun(L) -> L >= 1 andalso L =< 29 end, List);
-check_failed_field(month, List) ->
+check_crashed_field(month, List) ->
     not lists:all(fun(L) -> L >= 1 andalso L =< 12 end, List);
-check_failed_field(day_of_week, List) ->
+check_crashed_field(day_of_week, List) ->
     not lists:all(fun(L) -> L >= 0 andalso L =< 6 end, List);
-check_failed_field([wrong], _) ->
+check_crashed_field([wrong], _) ->
     true.
 
 spec_to_str(Spec, Rand, Extra) ->

@@ -2,21 +2,46 @@
 
 -include("ecron.hrl").
 
+?MODULEDOC("""
+`ecron` enables dynamic scheduling of tasks using crontab-style expressions. 
+It provides a flexible API for managing recurring jobs, one-time tasks, 
+and time-based message delivery.
+
+""").
 %% API Function
--export([add/3, add/4, add/6, add/7]).
--export([add_with_time/5, add_with_time/6]).
--export([add_with_count/3, add_with_count/5]).
--export([send_interval/3, send_interval/5, send_interval/7, send_interval/8]).
+-export([start_link/1, start_link/2]).
+-export([create/3, create/4]).
 -export([send_after/3]).
+-export([send_interval/2, send_interval/3, send_interval/4]).
 -export([delete/1, delete/2]).
 -export([deactivate/1, activate/1, deactivate/2, activate/2]).
 -export([statistic/0, statistic/1, statistic/2]).
--export([reload/0]).
+-export([predict_datetime/2, predict_datetime/4]).
+-export([reload/0, reload/1]).
 -export([parse_spec/2]).
 
 %% Callback Function
--export([start_link/2, handle_call/3, handle_info/2, init/1, handle_cast/2]).
--export([spawn_mfa/3, clear/0]).
+-export([handle_call/3, handle_info/2, init/1, handle_cast/2]).
+-export([spawn_mfa/3, spawn_mfa/4, clear/0]).
+
+%% Deprecated Function
+-export([add/3, add/4, add/6, add/7]).
+-export([add_with_time/5, add_with_time/6]).
+-export([add_with_count/3, add_with_count/5]).
+-export([send_interval/5, send_interval/7, send_interval/8]).
+-deprecated([
+    {add, 3, "use create/3 instead"},
+    {add, 4, "use create/4 instead"},
+    {add, 6, "use create/4 instead"},
+    {add, 7, "use create/4 instead"},
+    {add_with_time, 5, "use create/4 instead"},
+    {add_with_time, 6, "use create/4 instead"},
+    {add_with_count, 3, "use create/4 instead"},
+    {add_with_count, 5, "use create/4 instead"},
+    {send_interval, 5, "use send_interval/4 instead"},
+    {send_interval, 7, "use send_interval/4 instead"},
+    {send_interval, 8, "use send_interval/4 instead"}
+]).
 
 -record(state, {time_zone, max_timeout, timer_tab, job_tab}).
 -record(timer, {
@@ -28,9 +53,10 @@
     spec,
     mfa,
     link,
-    start_at = {0, 0, 0},
-    end_at = {23, 59, 59},
-    max_count = unlimited
+    start_time = {0, 0, 0},
+    end_time = {23, 59, 59},
+    max_count = unlimited,
+    max_runtime_ms = unlimited
 }).
 
 -define(MAX_SIZE, 16).
@@ -55,109 +81,474 @@
 }.
 
 %% from calendar:rfc3339_string/0 exist but not exported
--type rfc3339_string() :: [byte(), ...].
+-type rfc3339_string() :: string() | binary().
 
 -type mfargs() :: {M :: module(), F :: atom(), A :: [term()]}.
--type ecron() :: #{
-    name => name(),
-    crontab => crontab(),
-    start_time => rfc3339_string() | unlimited,
-    end_time => rfc3339_string() | unlimited,
-    mfa => mfargs(),
-    type => cron | every
-}.
-
--type status() :: deactivate | activate.
 
 -type statistic() :: #{
-    ecron => ecron(),
-    status => status(),
-    failed => non_neg_integer(),
+    name => name(),
+    node => node(),
+    type => cron | every,
+    crontab => crontab(),
+    status => deactivate | activate,
+    crashed => non_neg_integer(),
     ok => non_neg_integer(),
+    aborted => non_neg_integer(),
+    opts => option_list(),
     results => [term()],
     run_microsecond => [pos_integer()],
-    time_zone => local | utc,
-    worker => pid(),
+    start_time => rfc3339_string() | unlimited,
+    end_time => rfc3339_string() | unlimited,
     next => [calendar:datetime()]
 }.
 
 -type parse_error() ::
-    invalid_time | invalid_spec | month | day_of_month | day_of_week | hour | minute | second.
+    invalid_time
+    | invalid_opts
+    | invalid_spec
+    | month
+    | day_of_month
+    | day_of_week
+    | hour
+    | minute
+    | second.
 
 -type start_at() :: unlimited | calendar:time().
 -type end_at() :: unlimited | calendar:time().
--type option() :: {singleton, boolean()} | {max_count, pos_integer() | unlimited}.
--type options() :: [option()].
+-type option_list() :: [
+    {singleton, boolean()}
+    | {max_count, pos_integer() | unlimited}
+    | {max_runtime_ms, pos_integer() | unlimited}
+].
+
+-type options() :: #{
+    singleton => boolean(),
+    max_count => pos_integer() | unlimited,
+    max_runtime_ms => pos_integer() | unlimited,
+    start_time => start_at(),
+    end_time => end_at(),
+    register => register()
+}.
 -type ecron_result() :: {ok, name()} | {error, parse_error(), term()} | {error, already_exist}.
 
-%% @equiv add(ecron_local, JobName, Spec, MFA)
+?DOC("""
+Same as [`create(JobName, Spec, MFA, #{})`](`create/4`).
+## Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+UniqueJobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, UniqueJobName} = ecron:create(UniqueJobName, "0 4 * * *", MFA),
+ecron:statistic(UniqueJobName).
+```
+
+### Elixir
+```elixir
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.create(job_name, "0 4 * * *", mfa)
+:ecron.statistic(job_name)
+```
+
+<!-- tabs-close -->
+
+""").
+-spec create(name(), crontab_spec(), mfargs()) -> ecron_result().
+create(JobName, Spec, MFA) ->
+    create(JobName, Spec, MFA, #{}).
+-if(?OTP_RELEASE >= 27).
+?DOC("""
+Adds a new crontab job with specified parameters. 
+Jobs exceeding their limits are automatically removed.
+
+Parameters:
+* `JobName` - Unique identifier for the job. Returns `{error, already_exist}` if duplicate
+* `Spec` - [Crontab expression](readme.html#cron-expression-guide) defining execution schedule
+* `MFA` - `{Module, Function, Args}` to execute when triggered
+* `Opts` - Options map:
+   * register: `atom()` - The process name where the job will be registered (default: `ecron_local`)
+   * start_time: `{Hour,Min,Sec}|unlimited` - Start time for job execution (default: `unlimited`)
+   * end_time: `{Hour,Min,Sec}|unlimited` - End time for job execution (default: `unlimited`) 
+   * singleton: `boolean()` - If true, prevents concurrent execution (default: `false`)
+   * max_count: `pos_integer()|unlimited` - Maximum number of executions allowed (default: `unlimited`). It will be automatically removed When a job reaches its max_count limit.
+   * max_runtime_ms: `pos_integer()|unlimited` - Maximum runtime in milliseconds per execution (default: `unlimited`)
+
+Returns: `{ok, JobName}` | `{error, already_exist}` | `{error, parse_error(), term()}`
+
+# Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+Register = my_job_register,
+{ok, _Pid} = ecron:start_link(Register, []),
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, JobName} = ecron:create(JobName, "0 4 * * *", MFA, #{
+    start_time => {1, 0, 0}, 
+    end_time => unlimited, 
+    singleton => false,
+    max_count => unlimited,
+    max_runtime_ms => 1000,
+    register => Register
+}),
+ecron:statistic(Register, JobName).
+```
+
+### Elixir
+```elixir
+register = :my_job_register
+{:ok, _Pid} = :ecron.start_link(register, [])
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.create(job_name, "0 4 * * *", mfa, %{
+    :start_time => {1, 0, 0}, 
+    :end_time => :unlimited, 
+    :singleton => false,
+    :max_count => :unlimited,
+    :max_runtime_ms => 1000,
+    :register => register
+})
+:ecron.statistic(register, job_name)
+```
+
+<!-- tabs-close -->
+> #### Singleton {: .info}
+> When a job's singleton option is set to true, the system checks 
+> if there is already an instance of the job running before starting a new execution. 
+> If an instance is already running (old pid is alive), the new execution will be skipped.
+
+> #### TimeRange {: .info}
+> The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
+>
+> For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
+> so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
+
+If we can not find the next schedule time in the next 5 years, return 'cant find next schedule time in the next 5 years'.
+
+```erlang
+ ecron:create(invalid_job, "* 0,13 * * *", {io, format, [test]}, #{
+       start_time => {1,0,0},
+       end_time => {12,0,0}
+   }).
+{error,invalid_time,
+       #{reason => "cant find next schedule time in the next 5 years",
+         spec => "* 0,13 * * *",
+         start_time => {1,0,0},
+         end_time => {12,0,0}}}
+```
+
+""").
+-endif.
+-spec create(name(), crontab_spec(), mfargs(), options()) -> ecron_result().
+create(JobName, Spec, MFA, Opts = #{}) ->
+    Register = maps:get(register, Opts, ?LocalJob),
+    StartAt = maps:get(start_time, Opts, unlimited),
+    EndAt = maps:get(end_time, Opts, unlimited),
+    RunCount = maps:get(max_count, Opts, unlimited),
+    MaxRuntimeMs = maps:get(max_runtime_ms, Opts, unlimited),
+    Singleton = maps:get(singleton, Opts, false),
+    OptsList = [
+        {max_count, RunCount},
+        {max_runtime_ms, MaxRuntimeMs},
+        {singleton, Singleton}
+    ],
+    create(Register, JobName, Spec, MFA, StartAt, EndAt, OptsList).
+
+?DOC("""
+Same as [`add(ecron_local, JobName, Spec, MFA)`](`add/4`).
+`ecron_local` is the default register name, always exists.
+## Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, JobName} = ecron:add(JobName, "0 4 * * *", MFA),
+ecron:statistic(JobName).
+```
+
+### Elixir
+```elixir
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.add(job_name, "0 4 * * *", mfa)
+:ecron.statistic(job_name)
+```
+
+<!-- tabs-close -->
+
+""").
 -spec add(name(), crontab_spec(), mfargs()) -> ecron_result().
 add(JobName, Spec, MFA) ->
-    add(?LocalJob, JobName, Spec, MFA).
+    create(JobName, Spec, MFA, #{register => ?LocalJob}).
 
-%% @equiv add(Register, JobName, Spec, MFA, unlimited, unlimited, [])
+-if(?OTP_RELEASE >= 27).
+?DOC("""
+Same as [`add(Register, JobName, Spec, MFA, unlimited, unlimited, [])`](`add/7`).
+## Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+Register = my_cronjob_register,
+{ok, _Pid} = ecron:start_link(Register, []),
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, JobName} = ecron:add(Register, JobName, "0 4 * * *", MFA),
+ecron:statistic(Register, JobName).
+```
+
+### Elixir
+```elixir
+register = :my_cronjob_register
+{:ok, _Pid} = :ecron.start_link(register, [])
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.add(register, job_name, "0 4 * * *", mfa)
+:ecron.statistic(register, job_name)
+```
+<!-- tabs-close -->
+
+""").
+-endif.
 -spec add(register(), name(), crontab_spec(), mfargs()) -> ecron_result().
 add(Register, JobName, Spec, MFA) ->
-    add(Register, JobName, Spec, MFA, unlimited, unlimited, []).
+    create(Register, JobName, Spec, MFA, unlimited, unlimited, []).
 
-%% @equiv add_with_count(ecron_local, make_ref(), Spec, MFA, RunCount)
+?DOC("""
+Same as [`add_with_count(ecron_local, make_ref(), Spec, MFA, RunCount)`](`add_with_count/5`).
+`ecron_local` is the default register name, always exists.
+## Examples
+The job will be auto deleted after running 10 times.
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, JobName} = ecron:add_with_count(JobName, "0 4 * * *", MFA, 10),
+ecron:statistic(JobName).
+```
+
+### Elixir
+```elixir
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.add_with_count(job_name, "0 4 * * *", mfa, 10)
+:ecron.statistic(job_name)
+```
+
+<!-- tabs-close -->
+
+""").
 -spec add_with_count(crontab_spec(), mfargs(), pos_integer()) -> ecron_result().
 add_with_count(Spec, MFA, RunCount) when is_integer(RunCount) ->
-    add_with_count(?LocalJob, make_ref(), Spec, MFA, RunCount).
+    create(make_ref(), Spec, MFA, #{register => ?LocalJob, max_count => RunCount}).
 
-%% @equiv add(register(), make_ref(), Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])
+?DOC("""
+Same as [`add(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}])`](`add/7`).
+## Examples
+The job will be auto deleted after running 10 times.
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+Register = my_cronjob_register,
+{ok, _Pid} = ecron:start_link(Register, []),
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, JobName} = ecron:add_with_count(Register, JobName, "0 4 * * *", MFA, 10),
+ecron:statistic(Register, JobName).
+```
+
+### Elixir
+```elixir
+register = :my_cronjob_register
+{:ok, _Pid} = :ecron.start_link(register, [])
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.add_with_count(register, job_name, "0 4 * * *", mfa, 10)
+:ecron.statistic(register, job_name)
+```
+
+<!-- tabs-close -->
+
+""").
 -spec add_with_count(register(), name(), crontab_spec(), mfargs(), pos_integer()) ->
     ecron_result().
 add_with_count(Register, JobName, Spec, MFA, RunCount) when is_integer(RunCount) ->
-    add(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
+    create(Register, JobName, Spec, MFA, unlimited, unlimited, [{max_count, RunCount}]).
 
-%% @equiv add(ecron_local, name(), Spec, MFA, Start, End, [])
+-if(?OTP_RELEASE >= 27).
+?DOC("""
+Add a job into default register with start and end time.
+If you want to use the specified register, use [`add_with_time/6`](#add_with_time/6).
+## Examples
+The job will be auto skipped if the current time is not between 04:00 and 12:00 everyday.
+<!-- tabs-open -->
+### Erlang
+```erlang
+JobName = on_hour_job,
+MFA = {io, format, ["Run at 04:00-12:00 on the hour.~n", []]},
+{ok, JobName} = ecron:add_with_time(JobName, "0 1-12/1 * * *", MFA, {4, 0, 0}, {12, 0, 0}),
+ecron:statistic(JobName).
+```
+### Elixir
+```elixir
+job_name = :on_hour_job
+mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
+{:ok, ^job_name} = :ecron.add_with_time(job_name, "0 1-12/1 * * *", mfa, {4, 0, 0}, {12, 0, 0})
+:ecron.statistic(job_name)
+```
+<!-- tabs-close -->
+    
+> #### TimeRange {: .info}
+> The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
+>
+> For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
+> so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
+    
+If we can not find the next schedule time in the next 5 years, return `cant find next schedule time in the next 5 years`.
+    
+```erlang
+ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
+{error,invalid_time,
+        #{reason => "cant find next schedule time in the next 5 years",
+            start => {1,0,0},
+            stop => {12,0,0},
+            spec => "* 0,13 * * *"}}
+```
+""").
+-endif.
 -spec add_with_time(name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
 add_with_time(JobName, Spec, MFA, Start, End) ->
-    add_with_time(?LocalJob, JobName, Spec, MFA, Start, End).
+    create(JobName, Spec, MFA, #{register => ?LocalJob, start_time => Start, end_time => End}).
 
-%% @equiv add(register(), name(), Spec, MFA, Start, End, [])
+-if(?OTP_RELEASE >= 27).
+?DOC("""
+Add a job into specified register with start and end time.
+If you want to use the default register, use [`add_with_time/5`](#add_with_time/5).
+## Examples
+The job will be auto skipped if the current time is not between 04:00 and 12:00 everyday.
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+Register = my_cronjob_register,
+{ok, _Pid} = ecron:start_link(Register, []),
+JobName = on_hour_job,
+MFA = {io, format, ["Run at 04:00-12:00 on the hour.~n", []]},
+{ok, JobName} = ecron:add_with_time(Register, JobName, "0 1-12/1 * * *", MFA, {4, 0, 0}, {12, 0, 0}),
+ecron:statistic(Register, JobName).
+```
+
+### Elixir
+```elixir
+register = :my_cronjob_register
+{:ok, _Pid} = :ecron.start_link(register, [])
+job_name = :on_hour_job
+mfa = {IO, :puts, ["Run at 04:00-12:00 on the hour.\n"]}
+{:ok, ^job_name} = :ecron.add_with_time(register, job_name, "0 1-12/1 * * *", mfa, {4, 0, 0}, {12, 0, 0})
+:ecron.statistic(register, job_name)
+```
+<!-- tabs-close -->
+
+> #### TimeRange {: .info}
+> The start time must be less than the maximum value in the spec, and the end time must be greater than the minimum value in the spec.
+>
+> For example: With spec `0 1-12/1 * * *` the max value is 12 and min value is 1,
+> so start time must be less than {12,0,0} and end time must be greater than {1,0,0}, with start < end.
+
+If we can not find the next schedule time in the next 5 years, return `cant find next schedule time in the next 5 years`.
+
+```erlang
+ecron:add_with_time(invalid_job, "* 0,13 * * *", {io, format, ["test"]},{1,0,0},{12,0,0}).
+{error,invalid_time,
+       #{reason => "cant find next schedule time in the next 5 years",
+         start => {1,0,0},
+         stop => {12,0,0},
+         spec => "* 0,13 * * *"}}
+```
+""").
+-endif.
 -spec add_with_time(register(), name(), crontab_spec(), mfargs(), start_at(), end_at()) ->
     ecron_result().
 add_with_time(Register, JobName, Spec, MFA, Start, End) ->
-    add(Register, JobName, Spec, MFA, Start, End, []).
+    create(Register, JobName, Spec, MFA, Start, End, []).
 
-%% @equiv add(ecron_local, name(), Spec, MFA, Start, End, [])
--spec add(name(), crontab_spec(), mfargs(), start_at(), end_at(), options()) ->
+?DOC("""
+Same as [`add(ecron_local, JobName, Spec, MFA, Start, End, Opts)`](`add/7`).
+""").
+-spec add(name(), crontab_spec(), mfargs(), start_at(), end_at(), option_list()) ->
     ecron_result().
 add(JobName, Spec, MFA, Start, End, Opts) ->
-    add(?LocalJob, JobName, Spec, MFA, Start, End, Opts).
+    create(?LocalJob, JobName, Spec, MFA, Start, End, Opts).
 
-%% @doc
-%% Adds a new crontab job with specified parameters. Jobs exceeding their limits are automatically removed.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - The process name where the job will be registered</li>
-%%   <li>`JobName' - Unique identifier for the job. Returns `{error, already_exist}' if duplicate</li>
-%%   <li>`Spec' - Crontab expression defining execution schedule</li>
-%%   <li>`MFA' - `{Module, Function, Args}' to execute when triggered</li>
-%%   <li>`Start' - Start time `{Hour,Min,Sec}' or `unlimited' for immediate start</li>
-%%   <li>`End' - End time `{Hour,Min,Sec}' or `unlimited' for no end</li>
-%%   <li>`Opts' - Options list:
-%%     <ul>
-%%       <li>`{singleton, boolean()}' - If true (default), prevents concurrent execution</li>
-%%       <li>`{max_count, pos_integer() | unlimited}' - Maximum executions allowed</li>
-%%     </ul>
-%%   </li>
-%% </ul>
-%%
-%% Returns: `{ok, JobName}' | `{error, already_exist}' | `{error, parse_error(), term()}'
--spec add(register(), name(), crontab_spec(), mfargs(), start_at(), end_at(), options()) ->
+?DOC("""
+Adds a new crontab job with specified parameters. 
+Jobs exceeding their limits are automatically removed.
+
+Parameters:
+* `Register` - The process name where the job will be registered
+* `JobName` - Unique identifier for the job. Returns `{error, already_exist}` if duplicate
+* `Spec` - [Crontab expression](readme.html#cron-expression-guide) defining execution schedule
+* `MFA` - `{Module, Function, Args}` to execute when triggered
+* `Start` - Start time `{Hour,Min,Sec}` or `unlimited` for immediate start
+* `End` - End time `{Hour,Min,Sec}` or `unlimited` for no end
+* `Opts` - Options list:
+    * `{singleton, boolean()}` - If true (default), prevents concurrent execution
+    * `{max_count, pos_integer() | unlimited}` - Maximum executions allowed
+    * `{max_runtime_ms, pos_integer() | unlimited}` - Maximum runtime milliseconds allowed for each execution
+
+Returns: `{ok, JobName}` | `{error, already_exist}` | `{error, parse_error(), term()}`
+
+# Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+Register = my_cronjob_register,
+{ok, _Pid} = ecron:start_link(Register, []),
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, JobName} = ecron:add(Register, JobName, "0 4 * * *", MFA, {1, 0, 0}, unlimited, [{singleton, true}]),
+ecron:statistic(Register, JobName).
+```
+
+### Elixir
+```elixir
+register = :my_cronjob_register
+{:ok, _Pid} = :ecron.start_link(register, [])
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 everyday.\n"]}
+{:ok, ^job_name} = :ecron.add(register, job_name, "0 4 * * *", mfa, {1, 0, 0}, :unlimited, [singleton: true])
+:ecron.statistic(register, job_name)
+```
+
+<!-- tabs-close -->
+> #### Singleton {: .info}
+> When a job's singleton option is set to true, the system checks 
+> if there is already an instance of the job running before starting a new execution. 
+> If an instance is already running（old pid is alive）, the new execution will be skipped.
+
+""").
+-spec add(register(), name(), crontab_spec(), mfargs(), start_at(), end_at(), option_list()) ->
     ecron_result().
-add(Register, JobName, Spec, MFA, Start, End, Opts) ->
-    case ecron_spec:parse_start_end_time(Start, End) of
+add(Register, JobName, Spec, MFA, StartAt, EndAt, Opts) ->
+    create(Register, JobName, Spec, MFA, StartAt, EndAt, Opts).
+
+create(Register, JobName, Spec, MFA, StartAt, EndAt, Opts) ->
+    case ecron_spec:parse_start_end_time(StartAt, EndAt) of
         {StartTime, EndTime} ->
             case ecron_spec:parse_spec(Spec) of
                 {ok, Type, Crontab} ->
                     case ecron_spec:valid_time(Type, StartTime, EndTime, Crontab) of
-                        true ->
+                        ok ->
                             Job = #{
                                 type => Type,
                                 name => JobName,
@@ -166,41 +557,68 @@ add(Register, JobName, Spec, MFA, Start, End, Opts) ->
                                 start_time => StartTime,
                                 end_time => EndTime
                             },
-                            ValidOpts = ecron_spec:parse_valid_opts(Opts),
-                            case gen_server:call(Register, {add, Job, ValidOpts}, infinity) of
-                                {ok, Name} -> {ok, Name};
-                                {error, already_exist} -> {error, already_exist}
+                            case ecron_spec:parse_valid_opts(Opts) of
+                                {ok, ValidOpts} ->
+                                    case
+                                        gen_server:call(Register, {add, Job, ValidOpts}, infinity)
+                                    of
+                                        {ok, Name} -> {ok, Name};
+                                        {error, already_exist} -> {error, already_exist}
+                                    end;
+                                ErrOpts ->
+                                    ErrOpts
                             end;
-                        false ->
-                            {error, invalid_time, {Start, End, Spec}}
+                        {error, Reason} ->
+                            {error, invalid_time, #{
+                                start_time => StartAt,
+                                end_time => EndAt,
+                                spec => Spec,
+                                reason => Reason
+                            }}
                     end;
                 ErrParse ->
                     ErrParse
             end;
         false ->
-            {error, invalid_time, {Start, End, Spec}}
+            {error, invalid_time, #{start_time => StartAt, end_time => EndAt, spec => Spec}}
     end.
 
-%% @doc
-%% Creates a one-time timer that sends a message when the crontab spec is triggered.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Spec' - Crontab expression defining when to trigger</li>
-%%   <li>`Dest' - Destination pid() or registered name to receive message</li>
-%%   <li>`Message' - Term to send when timer triggers</li>
-%% </ul>
-%%
-%% Notes:
-%% <ul>
-%%   <li>Similar to erlang:send_after/3 but uses crontab format</li>
-%%   <li>Dest pid must be local</li>
-%%   <li>Maximum time value is 4294967295 milliseconds</li>
-%%   <li>Timer auto-cancels if destination process dies</li>
-%%   <li>Use erlang:cancel_timer/1 to cancel, not ecron:delete/1</li>
-%% </ul>
-%%
-%% Returns: `{ok, reference()}' | `{error, parse_error(), term()}'
+?DOC("""
+Create a one-time timer that sends a message when the crontab spec is triggered.
+
+Parameters:
+* `Spec` - Crontab expression defining when to trigger
+* `Dest` - Destination pid() or registered name to receive message
+* `Message` - Term to send when timer triggers
+
+Notes:
+* Similar to `erlang:send_after/3` but uses crontab format
+* Dest pid must be local
+* Maximum time value is 4294967295 milliseconds
+* Timer auto-cancels if destination process dies
+
+Returns: `{ok, reference()}` | `{error, parse_error(), term()}`
+
+# Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+ecron:send_after("*/3 * * * * *", self(), hello_world).
+```
+
+### Elixir
+```elixir
+:ecron.send_after("*/3 * * * * *", self(), :hello_world)
+```
+<!-- tabs-close -->
+
+> #### Statistic {: .info}
+> This is one-time timer, so it not seen in `statistic/0` result.    
+>
+> Use `erlang:cancel_timer/1` to cancel, not `ecron:delete/1`
+
+""").
 -spec send_after(crontab_spec(), pid() | atom(), term()) ->
     {ok, reference()} | {error, parse_error(), term()}.
 send_after(Spec, Pid, Message) ->
@@ -208,83 +626,148 @@ send_after(Spec, Pid, Message) ->
         {ok, Type, JobSpec} ->
             TimeZone = get_time_zone(),
             Now = current_millisecond(),
-            Next = next_schedule_millisecond(Type, JobSpec, TimeZone, Now, {0, 0, 0}, {23, 59, 59}),
+            {ok, Next} = next_schedule_millisecond(
+                Type, JobSpec, TimeZone, Now, {0, 0, 0}, {23, 59, 59}, Now
+            ),
             {ok, erlang:send_after(Next - Now, Pid, Message)};
         {error, _Field, _Value} = Error ->
             Error
     end.
 
-%% @equiv send_interval(ecron_local, make_ref(), Spec, Pid, Message, unlimited, unlimited, [])
+?DOC("""
+Sends a message to a process repeatedly based on a crontab schedule from the default registry. 
+Same as [`send_interval(ecron_local, make_ref(), Spec, Pid, Message, unlimited, unlimited, [])`](`send_interval/7`).
+""").
 -spec send_interval(crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Spec, Pid, Message) ->
-    send_interval(?LocalJob, make_ref(), Spec, Pid, Message).
+    send_interval(Spec, Pid, Message, #{}).
 
-%% @equiv send_interval(ecron_local,name(), Spec, Pid, Message, unlimited, unlimited, [])
+?DOC("""
+Sends a message to a process repeatedly based on a crontab schedule from the default registry. 
+Same as [`send_interval(Spec, Pid, Message, #{register => ecron_local})`](`send_interval/4`).
+""").
+-spec send_interval(crontab_spec(), term()) -> ecron_result().
+send_interval(Spec, Message) ->
+    send_interval(Spec, self(), Message, #{}).
+
+?DOC("""
+Evaluates `Pid ! Message` repeatedly after crontab schedule milliseconds.
+
+Parameters:
+* `Spec` - Crontab expression defining when to trigger
+* `Pid` - Destination process ID or registered name
+* `Message` - Term to send on each trigger
+* `Opts` - Same options as `create/4`
+
+Returns: `{ok, reference()}` | `{error, parse_error(), term()}`
+
+# Examples
+<!-- tabs-open -->
+
+### Erlang
+```erlang
+ecron:send_interval("*/3 * * * * *", self(), hello_world).
+```
+
+### Elixir
+```elixir
+:ecron.send_interval("*/3 * * * * *", self(), :hello_world)
+```
+<!-- tabs-close -->
+
+> #### Statistic {: .info}
+> This is repeatable timer, so it seen in `statistic/0` result.    
+>
+> Use `ecron:delete/1` to cancel, not `erlang:cancel_timer/1`
+
+""").
+-spec send_interval(crontab_spec(), pid(), term(), options()) -> ecron_result().
+send_interval(Spec, Pid, Message, Opts) ->
+    create(make_ref(), Spec, {erlang, send, [Pid, Message]}, Opts).
+
+?DOC("""
+Sends a message to a process repeatedly based on a crontab schedule from the specified registry. 
+Same as [`send_interval(Register, Name, Spec, Pid, Message, unlimited, unlimited, [])`](`send_interval/7`).
+""").
 -spec send_interval(register(), name(), crontab_spec(), pid(), term()) -> ecron_result().
 send_interval(Register, Name, Spec, Pid, Message) ->
     send_interval(Register, Name, Spec, Pid, Message, unlimited, unlimited, []).
 
-%% @equiv send_interval(register(), name(), Spec, self(), Message, Start, End, Option)
--spec send_interval(register(), name(), crontab_spec(), term(), start_at(), end_at(), options()) ->
+?DOC("""
+Same as [`send_interval(register(), name(), Spec, self(), Message, Start, End, Option)`](`send_interval/8`).
+""").
+-spec send_interval(
+    register(), name(), crontab_spec(), term(), start_at(), end_at(), option_list()
+) ->
     ecron_result().
 send_interval(Register, Name, Spec, Message, Start, End, Option) ->
     send_interval(Register, Name, Spec, self(), Message, Start, End, Option).
 
-%% @doc
-%% Sends a message to a process repeatedly based on a crontab schedule.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job will be registered</li>
-%%   <li>`JobName' - Unique identifier for the job</li>
-%%   <li>`Spec' - Crontab expression defining execution schedule</li>
-%%   <li>`Pid' - Destination process ID or registered name</li>
-%%   <li>`Message' - Term to send on each trigger</li>
-%%   <li>`Start' - Start time `{Hour,Min,Sec}' or `unlimited'</li>
-%%   <li>`End' - End time `{Hour,Min,Sec}' or `unlimited'</li>
-%%   <li>`Option' - Same options as add/7</li>
-%% </ul>
-%%
-%% Returns: Same as add/7
+?DOC("""
+Sends a message to a process repeatedly based on a crontab schedule.
+
+### Parameters
+* `Register` - Process name where job will be registered
+* `JobName` - Unique identifier for the job
+* `Spec` - Crontab expression defining execution schedule
+* `Pid` - Destination process ID or registered name
+* `Message` - Term to send on each trigger
+* `Start` - Start time `{Hour,Min,Sec}` or `unlimited`
+* `End` - End time `{Hour,Min,Sec}` or `unlimited`
+* `Option` - Same options as `add/7`
+
+Returns: `{ok, reference()}` | `{error, parse_error(), term()}`
+
+""").
 -spec send_interval(
-    register(), name(), crontab_spec(), pid(), term(), start_at(), end_at(), options()
+    register(), name(), crontab_spec(), pid(), term(), start_at(), end_at(), option_list()
 ) ->
     ecron_result().
 send_interval(Register, JobName, Spec, Pid, Message, Start, End, Option) ->
-    add(Register, JobName, Spec, {erlang, send, [Pid, Message]}, Start, End, Option).
+    create(Register, JobName, Spec, {erlang, send, [Pid, Message]}, Start, End, Option).
 
-%% @equiv delete(ecron_local, Name)
+?DOC("""
+Deletes an existing job from the default registry. 
+If the job does not exist, it will be ignored.
+Use [`delete/2`](#delete/2) to delete a job from a specified registry.
+
+Returns: `ok`
+""").
 -spec delete(name()) -> ok.
 delete(JobName) -> delete(?LocalJob, JobName).
 
-%% @doc
-%% Deletes an existing job. If the job does not exist, it will be ignored.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to delete</li>
-%% </ul>
-%%
-%% Returns: `ok'
+?DOC("""
+Deletes an existing job from the specified registry.
+If the job does not exist, it will be ignored.
+Use [`delete/1`](#delete/1) to delete a job from the default registry.
+
+Parameters:
+* `Register` - Process name where job is registered
+* `JobName` - Name of job to delete
+
+Returns: `ok`
+""").
 -spec delete(register(), name()) -> ok.
 delete(Register, JobName) ->
     ok = gen_server:call(Register, {delete, JobName}, infinity).
 
-%% @equiv deactivate(ecron_local, Name)
+?DOC("""
+Deactivates an existing job temporarily from the default registry. 
+The job can be reactivated using [`activate/1`](#activate/1).
+""").
 -spec deactivate(name()) -> ok | {error, not_found}.
 deactivate(JobName) -> deactivate(?LocalJob, JobName).
 
-%% @doc
-%% Deactivates an existing job temporarily. The job can be reactivated using activate/2.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to deactivate</li>
-%% </ul>
-%%
-%% Returns: `ok' | `{error, not_found}'
+?DOC("""
+Deactivates an existing job temporarily from the specified registry. 
+The job can be reactivated using [`activate/2`](#activate/2).
+
+Parameters:
+* `Register` - Process name where job is registered  
+* `JobName` - Name of job to deactivate
+
+Returns: `ok` | `{error, not_found}`
+""").
 -spec deactivate(register(), name()) -> ok | {error, not_found}.
 deactivate(Register, JobName) ->
     case gen_server:call(Register, {deactivate, JobName}, infinity) of
@@ -292,20 +775,24 @@ deactivate(Register, JobName) ->
         {error, not_found} -> {error, not_found}
     end.
 
-%% @equiv activate(ecron_local, Name)
+?DOC("""
+Activates a previously deactivated job from the default registry. 
+The job can be deactivated using [`deactivate/1`](#deactivate/1).
+""").
 -spec activate(name()) -> ok | {error, not_found}.
 activate(JobName) -> activate(?LocalJob, JobName).
 
-%% @doc
-%% Activates a previously deactivated job. The job will resume from the current time.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to activate</li>
-%% </ul>
-%%
-%% Returns: `ok' | `{error, not_found}'
+?DOC("""
+Activates a previously deactivated job from the specified registry. 
+The job will resume from the current time.
+The job can be deactivated using [`deactivate/2`](#deactivate/2).
+
+Parameters:
+* `Register` - Process name where job is registered
+* `JobName` - Name of job to activate
+
+Returns: `ok` | `{error, not_found}`
+""").
 -spec activate(register(), name()) -> ok | {error, not_found}.
 activate(Register, JobName) ->
     case gen_server:call(Register, {activate, JobName}, infinity) of
@@ -313,11 +800,13 @@ activate(Register, JobName) ->
         {error, not_found} -> {error, not_found}
     end.
 
-%% @doc
-%% Retrieves statistics for local registered jobs.
-%%
-%% Returns: List of statistics for all jobs in local registries.
-%% Each statistic entry contains the same information as statistic/2.
+?DOC("""
+Retrieves statistics for default registry.
+Use [`statistic/2`](#statistic/2) to get statistics for a specific registry.
+
+Returns: List of statistics for all jobs in local registries.
+Each statistic entry contains the same information as `statistic/2`.
+""").
 -spec statistic(register() | name()) -> [statistic()].
 statistic(Register) ->
     case is_atom(Register) andalso undefined =/= erlang:whereis(Register) of
@@ -326,25 +815,46 @@ statistic(Register) ->
         true ->
             ets:foldl(fun(Job, Acc) -> [job_to_statistic(Job) | Acc] end, [], Register)
     end.
+?DOC("""
+Retrieves statistics for a specific job from the specified registry.
+Use [`statistic/1`](#statistic/1) to get statistics for the default registry.
 
-%% @doc
-%% Retrieves statistics for a specific job.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Register' - Process name where job is registered</li>
-%%   <li>`JobName' - Name of job to get statistics for</li>
-%% </ul>
-%%
-%% Returns: `{ok, statistic()}' | `{error, not_found}'
-%% Where statistic() contains:
-%% <ul>
-%%   <li>Job configuration</li>
-%%   <li>Execution counts (success/failure)</li>
-%%   <li>Latest results</li>
-%%   <li>Run times</li>
-%%   <li>Next scheduled runs</li>
-%% </ul>
+Parameters:
+* `Register` - Process name where job is registered
+* `JobName` - Name of job to get statistics for
+
+Returns: `{ok, statistic()}` | `{error, not_found}`
+
+Where statistic() contains:
+- Job configuration
+- Execution counts (ok/crashed/aborted/skipped)  
+- Latest results
+- Run times
+- Next scheduled runs
+```erlang
+1> ecron:statistic(basic).
+[#{name => basic,node => nonode@nohost,ok => 0,
+   status => activate,type => cron,
+   next => ["2025-02-20T22:15:00+08:00"...],        
+   opts => [{singleton,false},{max_count,unlimited},{max_runtime_ms,unlimited}],
+   mfa => {io,format,['Runs on 0, 15, 30, 45 minutes~n']},
+   aborted => 0,crashed => 0,skipped => 0,
+   start_time => {0,0,0},
+   end_time => {23,59,59},
+   run_microsecond => [],
+   crontab =>
+       #{second => [0],
+         month => '*',
+         minute => [0,15,30,45],
+         hour => '*',day_of_month => '*',day_of_week => '*'},
+   results => []}]
+```
+- `ok`: successful job.
+- `crashed`: crashed job.
+- `skipped`: singleton(true) job has been skipped due to the previous task still running.
+- `aborted`: job has been aborted due to exceeding `max_runtime_ms`.
+
+""").
 -spec statistic(register(), name()) -> {ok, statistic()} | {error, not_found}.
 statistic(Register, JobName) ->
     case ets:lookup(Register, JobName) of
@@ -359,11 +869,39 @@ statistic(Register, JobName) ->
             end
     end.
 
-%% @doc
-%% Retrieves statistics for both local and global registered jobs.
-%%
-%% Returns: List of statistics for all jobs in both local and global registries.
-%% Each statistic entry contains the same information as statistic/2.
+?DOC("""
+Retrieves statistics for both default and global registered jobs.
+
+Returns: List of statistics for all jobs in both local and global registries.
+Each statistic entry contains the same information as `statistic/2`.
+
+```erlang
+UniqueJobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 everyday.~n", []]},
+{ok, UniqueJobName} = ecron:create(UniqueJobName, "0 4 * * *", MFA),
+ecron:statistic(UniqueJobName).
+
+[#{name => every_4am_job,node => nonode@nohost,ok => 0,
+   status => activate,type => cron,
+   next =>
+       ["2025-02-19T04:00:00+08:00","2025-02-20T04:00:00+08:00",
+        "2025-02-21T04:00:00+08:00","2025-02-22T04:00:00+08:00",
+        ...
+        ],
+   opts => [{singleton,false}, {max_count,unlimited}, {max_runtime_ms,unlimited}],
+   mfa => {io,format,["Run at 04:00 everyday.~n",[]]},
+   aborted => 0,crashed => 0,skipped => 0, run_microsecond => [],
+   start_time => {0,0,0},
+   end_time => {23,59,59},
+   crontab =>
+       #{second => [0],
+         month => '*',
+         minute => [0],
+         hour => [4],
+         day_of_month => '*',day_of_week => '*'},
+   results => []}]
+```    
+""").
 -spec statistic() -> [statistic()].
 statistic() ->
     Local = ets:foldl(
@@ -380,61 +918,106 @@ statistic() ->
     is_list(Local) orelse throw({error, invalid_statistic, Local}),
     lists:append(Local, Global).
 
-%% @doc
-%% Reloads all tasks manually. Useful when system time has changed significantly.
-%%
-%% This will:
-%% <ul>
-%%   <li>Recalculate next execution times for all jobs</li>
-%%   <li>Reset internal timers</li>
-%%   <li>Apply to both local and global jobs</li>
-%% </ul>
-%%
-%% Returns: ok
+?DOC("""
+Reloads all tasks manually. Useful when system time has changed significantly.
+
+This will:
+- Recalculate next execution times for all jobs
+- Reset internal timers
+- Apply to both default and global registries
+
+Returns: `ok`
+""").
 -spec reload() -> ok.
 reload() ->
     gen_server:cast(?LocalJob, reload),
     gen_server:cast({global, ?GlobalJob}, reload).
 
-%% @doc
-%% Parses a crontab specification and returns the next N trigger times.
-%% Useful for debugging and validating crontab expressions.
-%%
-%% Parameters:
-%% <ul>
-%%   <li>`Spec' - Crontab expression to parse</li>
-%%   <li>`Num' - Number of future trigger times to calculate</li>
-%% </ul>
-%%
-%% Returns: `{ok, #{type => cron|every, crontab => parsed_spec, next => [rfc3339_string()]}}' |
-%%          `{error, parse_error(), term()}'
+?DOC("""
+Reloads all tasks manually. Useful when system time has changed significantly.
+
+Parameters:
+* `Register` - Process name where job is registered
+
+Returns: `ok`
+
+""").
+-spec reload(register()) -> ok.
+reload(Register) ->
+    gen_server:cast(Register, reload).
+
+?DOC("""
+Parses a crontab specification and returns the next N trigger times.
+Useful for debugging and validating crontab expressions.
+
+Parameters:
+* `Spec` - Crontab expression to parse
+* `Num` - Number of future trigger times to calculate
+
+Returns: `{ok, #{type => cron|every, crontab => parsed_spec, next => [rfc3339_string()]}}` |
+`{error, parse_error(), term()}`
+
+
+""").
 -spec parse_spec(crontab_spec(), pos_integer()) ->
-    {ok, #{type => cron | every, crontab => crontab_spec(), next => [rfc3339_string()]}}
+    {ok, #{type => cron | every, crontab => crontab(), next => [rfc3339_string()]}}
     | {error, atom(), term()}.
 parse_spec(Spec, Num) when is_integer(Num) andalso Num > 0 ->
     parse_spec2(ecron_spec:parse_spec(Spec), Num).
 
 parse_spec2({ok, Type, JobSpec}, Num) ->
     Job = #{type => Type, crontab => JobSpec},
-    Next = predict_datetime(Job, Num),
+    {ok, Next} = predict_datetime(Job, Num),
     {ok, Job#{next => Next}};
 parse_spec2({error, _Field, _Value} = Error, _Num) ->
     Error.
 
 get_next_schedule_time(Name) -> gen_server:call(?LocalJob, {next_schedule_time, Name}, infinity).
 
-%% @private
+?DOC(false).
 clear() -> gen_server:call(?LocalJob, clear, infinity).
 
+?DOC(false).
 predict_datetime(Job, Num) ->
+    predict_datetime(Job, Num, {0, 0, 0}, {23, 59, 59}).
+
+?DOC(false).
+predict_datetime(Job, Num, Start, End) ->
     TZ = get_time_zone(),
     Now = current_millisecond(),
-    predict_datetime(activate, Job, {0, 0, 0}, {23, 59, 59}, Num, TZ, Now).
+    predict_datetime(activate, Job, Start, End, Num, TZ, Now).
 
 %%%===================================================================
 %%% CallBack
 %%%===================================================================
-%% @private
+?DOC("""
+Create a new registry.
+Same as [`start_link(Register, [])`](#start_link/2).
+Parameters:
+* `Register` - Process name where job is registered
+
+Returns: `{ok, Pid}` | `{error, Reason}`
+
+""").
+-spec start_link(register() | {local | global, register()}) ->
+    {ok, pid()} | {error, term()} | ignore.
+start_link(Register) when is_atom(Register) ->
+    start_link({local, Register}, []).
+
+?DOC("""
+Starts an new registry.
+
+Parameters:
+* `Name` - Process name where job is registered
+* `JobSpec` - Crontab expression to parse list
+
+Returns: `{ok, Pid}` | `{error, Reason}`
+
+""").
+-spec start_link(atom() | {local | global, atom()}, [{name(), crontab_spec(), mfargs()}]) ->
+    {ok, pid()} | {error, term()} | ignore.
+start_link(JobTab, JobSpec) when is_atom(JobTab) ->
+    start_link({local, JobTab}, JobSpec);
 start_link({_, JobTab} = Name, JobSpec) ->
     case ecron_spec:parse_crontab(JobSpec, []) of
         {ok, Jobs} ->
@@ -442,10 +1025,9 @@ start_link({_, JobTab} = Name, JobSpec) ->
             gen_server:start_link(Name, ?MODULE, [JobTab, Jobs], []);
         {error, Reason} ->
             {error, Reason}
-    end;
-start_link(JobTab, JobSpec) when is_atom(JobTab) ->
-    start_link({local, JobTab}, JobSpec).
-%% @private
+    end.
+
+?DOC(false).
 init([JobTab, Jobs]) ->
     erlang:process_flag(trap_exit, true),
     TimerTab = ets:new(ecron_timer, [ordered_set, protected, {keypos, #timer.key}]),
@@ -464,7 +1046,7 @@ init([JobTab, Jobs]) ->
         time_zone = TimeZone
     },
     {ok, State, next_timeout(State)}.
-%% @private
+?DOC(false).
 handle_call({add, Job, Opts}, _From, State) ->
     #state{timer_tab = TimerTab, job_tab = JobTab, time_zone = TimeZone} = State,
     Reply = add_job(JobTab, TimerTab, Job, TimeZone, Opts, false),
@@ -500,7 +1082,7 @@ handle_call(clear, _From, State = #state{timer_tab = TimerTab, job_tab = JobTab}
     {reply, ok, State, next_timeout(State)};
 handle_call(_Unknown, _From, State) ->
     {noreply, State, next_timeout(State)}.
-%% @private
+?DOC(false).
 handle_info(timeout, State) ->
     {noreply, State, tick(State)};
 handle_info({'EXIT', Pid, _Reason}, State = #state{timer_tab = TimerTab, job_tab = JobTab}) ->
@@ -508,7 +1090,7 @@ handle_info({'EXIT', Pid, _Reason}, State = #state{timer_tab = TimerTab, job_tab
     {noreply, State, next_timeout(State)};
 handle_info(_Unknown, State) ->
     {noreply, State, next_timeout(State)}.
-%% @private
+?DOC(false).
 handle_cast(_Unknown, State) ->
     {noreply, State, next_timeout(State)}.
 
@@ -530,12 +1112,13 @@ add_job(JobTab, TimerTab, Job, TimeZone, Opts, ForceUpdate) ->
             InitTimer = #timer{
                 singleton = proplists:get_value(singleton, Opts),
                 max_count = proplists:get_value(max_count, Opts),
+                max_runtime_ms = proplists:get_value(max_runtime_ms, Opts),
                 name = Name,
                 mfa = MFA,
                 link = PidOrUndef
             },
             Now = current_millisecond(),
-            telemetry:execute(?Activate, #{action_ms => Now}, #{name => Name, mfa => MFA}),
+            telemetry:execute(?Activate, #{action_at => Now}, #{name => Name, mfa => MFA}),
             update_timer(Now, InitTimer, Job, TimerTab, TimeZone);
         false ->
             {error, already_exist}
@@ -555,7 +1138,7 @@ deactivate_job(Name, JobTab, TimerTab) ->
     ets:select_delete(TimerTab, ?MatchNameSpec(Name)),
     case ets:update_element(JobTab, Name, {#job.status, deactivate}) of
         true ->
-            telemetry:execute(?Deactivate, #{action_ms => current_millisecond()}, #{name => Name}),
+            telemetry:execute(?Deactivate, #{action_at => current_millisecond()}, #{name => Name}),
             ok;
         false ->
             {error, not_found}
@@ -567,7 +1150,7 @@ delete_job(JobTab, TimerTab, Name) ->
         [] ->
             ok;
         [#job{link = Link}] ->
-            telemetry:execute(?Delete, #{action_ms => current_millisecond()}, #{name => Name}),
+            telemetry:execute(?Delete, #{action_at => current_millisecond()}, #{name => Name}),
             unlink_pid(Link),
             ets:delete(JobTab, Name)
     end.
@@ -583,22 +1166,22 @@ update_timer(Now, InitTimer, Job, TimeTab, TimeZone) ->
         start_time := Start,
         end_time := End
     } = Job,
-    NextSec = next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End),
+    {ok, NextSec} = next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End, Now),
     Timer = InitTimer#timer{
         key = {NextSec, Name},
         type = Type,
         spec = Spec,
-        start_at = Start,
-        end_at = End
+        start_time = Start,
+        end_time = End
     },
     ets:insert(TimeTab, Timer),
     {ok, Name}.
 
-next_schedule_millisecond(every, Sec, TimeZone, Now, Start, End) ->
+next_schedule_millisecond(every, Sec, TimeZone, Now, Start, End, InitMs) ->
     Next = Now + Sec * 1000,
     case Start =:= {0, 0, 0} andalso End =:= {23, 59, 59} of
         true ->
-            Next;
+            {ok, Next};
         false ->
             {_, {NowHour, NowMin, NowSec}} = millisecond_to_datetime(TimeZone, Next),
             {StartHour, StartMin, StartSec} = Start,
@@ -607,11 +1190,11 @@ next_schedule_millisecond(every, Sec, TimeZone, Now, Start, End) ->
             StartTime = StartHour * 3600 + StartMin * 60 + StartSec,
             EndTime = EndHour * 3600 + EndMin * 60 + EndSec,
             case NowTime >= StartTime andalso NowTime =< EndTime of
-                true -> Next;
-                false -> next_schedule_millisecond(every, Sec, TimeZone, Next, Start, End)
+                true -> {ok, Next};
+                false -> next_schedule_millisecond(every, Sec, TimeZone, Next, Start, End, InitMs)
             end
     end;
-next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End) ->
+next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End, InitMs) ->
     ForwardDateTime = millisecond_to_datetime(TimeZone, Now + 1000),
     DefaultMin = #{
         second => 0,
@@ -622,23 +1205,26 @@ next_schedule_millisecond(cron, Spec, TimeZone, Now, Start, End) ->
         day_of_week => 0
     },
     MinSpec = spec_min(maps:to_list(Spec), DefaultMin),
-    next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone).
+    next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone, InitMs).
 
-next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone) ->
+next_schedule_millisecond2(Spec, MinSpec, ForwardDateTime, Start, End, TimeZone, InitMs) ->
     NextDateTime =
         {_, {NH, NM, NS}} =
         next_schedule_datetime(Spec, MinSpec, ForwardDateTime, Start, End),
     Next = NH * 3600 + NM * 60 + NS,
     {SHour, SMin, SSec} = Start,
     {EHour, EMin, ESec} = End,
+    NextMs = datetime_to_millisecond(TimeZone, NextDateTime),
     case
         Next >= SHour * 3600 + SMin * 60 + SSec andalso
             Next =< EHour * 3600 + EMin * 60 + ESec
     of
         true ->
-            datetime_to_millisecond(TimeZone, NextDateTime);
+            {ok, NextMs};
+        false when NextMs - InitMs =< 5 * 365 * 24 * 3600 * 1000 ->
+            next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone, InitMs);
         false ->
-            next_schedule_millisecond2(Spec, MinSpec, NextDateTime, Start, End, TimeZone)
+            {error, "cant find next schedule time in the next 5 years"}
     end.
 
 next_schedule_datetime(DateSpec, Min, DateTime, Start, End) ->
@@ -713,39 +1299,91 @@ tick_tick({Due, _Name}, Cur, #state{max_timeout = MaxTimeout}) when Due > Cur ->
 tick_tick(Key = {Due, Name}, Cur, State) ->
     #state{time_zone = TZ, timer_tab = TimerTab, job_tab = JobTab} = State,
     [Cron] = ets:lookup(TimerTab, Key),
-    #timer{singleton = Singleton, mfa = MFA, max_count = MaxCount, cur_count = CurCount} = Cron,
+    #timer{
+        singleton = Singleton,
+        mfa = MFA,
+        max_runtime_ms = MaxRuntimeMs,
+        max_count = MaxCount,
+        cur_count = CurCount
+    } = Cron,
     ets:delete(TimerTab, Key),
-    {Incr, CurPid} = maybe_spawn_worker(Cur - Due < 1000, Singleton, Name, MFA, JobTab),
+    {Incr, CurPid} = maybe_spawn_worker(
+        Cur - Due < 1000, Singleton, Name, MFA, MaxRuntimeMs, JobTab
+    ),
     update_next_schedule(CurCount + Incr, MaxCount, Cron, Cur, Name, TZ, CurPid, TimerTab, JobTab),
     tick(State).
 
-maybe_spawn_worker(true, _, Name, {erlang, send, Args}, JobTab) ->
-    {1, spawn_mfa(JobTab, Name, {erlang, send, Args})};
-maybe_spawn_worker(true, true, Name, MFA, JobTab) ->
-    {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA])};
-maybe_spawn_worker(true, false, Name, MFA, JobTab) ->
-    spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA]),
+maybe_spawn_worker(true, _, Name, {erlang, send, Args}, MaxRuntimeMs, JobTab) ->
+    {1, spawn_mfa(JobTab, Name, {erlang, send, Args}, MaxRuntimeMs)};
+maybe_spawn_worker(true, true, Name, MFA, MaxRuntimeMs, JobTab) ->
+    {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs])};
+maybe_spawn_worker(true, false, Name, MFA, MaxRuntimeMs, JobTab) ->
+    spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs]),
     {1, false};
-maybe_spawn_worker(true, Pid, Name, MFA, JobTab) when is_pid(Pid) ->
+maybe_spawn_worker(true, Pid, Name, MFA, MaxRuntimeMs, JobTab) when is_pid(Pid) ->
     case is_process_alive(Pid) of
-        true -> {0, Pid};
-        false -> {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA])}
+        true ->
+            telemetry:execute(
+                ?Skipped,
+                #{
+                    job_last_pid => Pid,
+                    reason => "last task running, use {singleton, false} for concurrent runs",
+                    action_at => current_millisecond()
+                },
+                #{
+                    name => Name,
+                    mfa => MFA
+                }
+            ),
+            ets:update_counter(JobTab, Name, {#job.skipped, 1}),
+            {0, Pid};
+        false ->
+            {1, spawn(?MODULE, spawn_mfa, [JobTab, Name, MFA, MaxRuntimeMs])}
     end;
-maybe_spawn_worker(false, Singleton, _Name, _MFA, _JobTab) ->
+maybe_spawn_worker(false, Singleton, _Name, _MFA, _MaxRuntimeMs, _JobTab) ->
     {0, Singleton}.
 
 update_next_schedule(Max, Max, _Cron, _Cur, Name, _TZ, _CurPid, Tab, JobTab) ->
     delete_job(JobTab, Tab, Name);
 update_next_schedule(Count, _Max, Cron, Cur, Name, TZ, CurPid, Tab, _JobTab) ->
-    #timer{type = Type, start_at = Start, end_at = End, spec = Spec} = Cron,
-    Next = next_schedule_millisecond(Type, Spec, TZ, Cur, Start, End),
+    #timer{type = Type, start_time = Start, end_time = End, spec = Spec} = Cron,
+    {ok, Next} = next_schedule_millisecond(Type, Spec, TZ, Cur, Start, End, Cur),
     NextTimer = Cron#timer{key = {Next, Name}, singleton = CurPid, cur_count = Count},
     ets:insert(Tab, NextTimer).
 
-%% @private
+?DOC(false).
+spawn_mfa(JobTab, Name, MFA, unlimited) ->
+    spawn_mfa(JobTab, Name, MFA);
+spawn_mfa(JobTab, Name, MFA, MaxRuntimeMs) ->
+    {Pid, Ref} = spawn_monitor(?MODULE, spawn_mfa, [JobTab, Name, MFA]),
+    receive
+        {'DOWN', Ref, process, Pid, _Reason} ->
+            ok
+    after MaxRuntimeMs ->
+        case ets:lookup(JobTab, Name) of
+            [] ->
+                ok;
+            [_] ->
+                telemetry:execute(
+                    ?Aborted,
+                    #{
+                        run_microsecond => MaxRuntimeMs,
+                        action_at => current_millisecond()
+                    },
+                    #{
+                        name => Name,
+                        mfa => MFA
+                    }
+                ),
+                ets:update_counter(JobTab, Name, {#job.aborted, 1})
+        end,
+        exit(Pid, kill)
+    end.
+
+?DOC(false).
 spawn_mfa(JobTab, Name, MFA) ->
     Start = erlang:monotonic_time(),
-    {Event, OkInc, FailedInc, NewRes} =
+    {Event, OkInc, CrashedInc, NewRes} =
         try
             case MFA of
                 {erlang, send, [Pid, Message]} ->
@@ -758,22 +1396,26 @@ spawn_mfa(JobTab, Name, MFA) ->
             end
         catch
             Error:Reason:Stacktrace ->
-                {?Failure, 0, 1, {Error, Reason, Stacktrace}}
+                {?Crashed, 0, 1, {Error, Reason, Stacktrace}}
         end,
     End = erlang:monotonic_time(),
     Cost = erlang:convert_time_unit(End - Start, native, microsecond),
-    telemetry:execute(Event, #{run_microsecond => Cost, run_result => NewRes}, #{
-        name => Name,
-        mfa => MFA
-    }),
+    telemetry:execute(
+        Event,
+        #{run_microsecond => Cost, action_at => current_millisecond(), run_result => NewRes},
+        #{
+            name => Name,
+            mfa => MFA
+        }
+    ),
     case ets:lookup(JobTab, Name) of
         [] ->
             ok;
         [Job] ->
-            #job{ok = Ok, failed = Failed, run_microsecond = RunMs, result = Results} = Job,
+            #job{ok = Ok, crashed = Crashed, run_microsecond = RunMs, result = Results} = Job,
             Elements = [
                 {#job.ok, Ok + OkInc},
-                {#job.failed, Failed + FailedInc},
+                {#job.crashed, Crashed + CrashedInc},
                 {#job.run_microsecond, lists:sublist([Cost | RunMs], ?MAX_SIZE)},
                 {#job.result, lists:sublist([NewRes | Results], ?MAX_SIZE)}
             ],
@@ -929,7 +1571,7 @@ next_timeout(#state{timer_tab = TimerTab, max_timeout = MaxTimeout} = State) ->
 to_rfc3339(Next) -> calendar:system_time_to_rfc3339(Next div 1000, [{unit, second}]).
 
 predict_datetime(deactivate, _, _, _, _, _, _) ->
-    [];
+    {ok, []};
 predict_datetime(activate, #{type := every, crontab := Sec} = Job, Start, End, Num, TimeZone, NowT) ->
     Now =
         case maps:find(name, Job) of
@@ -941,12 +1583,16 @@ predict_datetime(activate, Job, Start, End, Num, TimeZone, Now) ->
     predict_datetime2(Job, TimeZone, Now, Start, End, Num, []).
 
 predict_datetime2(_Job, _TimeZone, _Now, _Start, _End, 0, Acc) ->
-    lists:reverse(Acc);
+    {ok, lists:reverse(Acc)};
 predict_datetime2(Job, TimeZone, Now, Start, End, Num, Acc) ->
     #{type := Type, crontab := Spec} = Job,
-    Next = next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End),
-    NewAcc = [to_rfc3339(Next) | Acc],
-    predict_datetime2(Job, TimeZone, Next, Start, End, Num - 1, NewAcc).
+    case next_schedule_millisecond(Type, Spec, TimeZone, Now, Start, End, Now) of
+        {ok, Next} ->
+            NewAcc = [to_rfc3339(Next) | Acc],
+            predict_datetime2(Job, TimeZone, Next, Start, End, Num - 1, NewAcc);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 get_next_schedule_time(Timer, Name) ->
     %% P = ets:fun2ms(fun(#timer{name = N, key = {Time, _}}) when N =:= Name -> Time end),
@@ -998,17 +1644,22 @@ job_to_statistic(Job, TimeZone, Now) ->
         status = Status,
         opts = Opts,
         ok = Ok,
-        failed = Failed,
+        crashed = Crashed,
+        skipped = Skipped,
+        aborted = Aborted,
         result = Res,
         run_microsecond = RunMs
     } = Job,
     #{start_time := StartTime, end_time := EndTime} = JobSpec,
+    {ok, Predict} = predict_datetime(Status, JobSpec, StartTime, EndTime, ?MAX_SIZE, TimeZone, Now),
     JobSpec#{
         status => Status,
         ok => Ok,
-        failed => Failed,
+        crashed => Crashed,
+        aborted => Aborted,
+        skipped => Skipped,
         opts => Opts,
-        next => predict_datetime(Status, JobSpec, StartTime, EndTime, ?MAX_SIZE, TimeZone, Now),
+        next => Predict,
         start_time => StartTime,
         end_time => EndTime,
         node => node(),
@@ -1031,6 +1682,7 @@ day_of_week(Y, M, D) ->
 
 maybe_spawn_woker_test() ->
     ?assertEqual(
-        {0, self()}, maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, job_tab)
+        {0, self()},
+        maybe_spawn_worker(false, self(), test_name, {erlang, datetime, []}, 1000, job_tab)
     ).
 -endif.

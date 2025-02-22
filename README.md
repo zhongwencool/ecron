@@ -1,321 +1,324 @@
-# ecron [![GitHub Actions](https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg)](https://github.com/zhongwencool/ecron) [![CodeCov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron) [![Hex](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron) [![Tag](https://img.shields.io/github/tag/zhongwencool/ecron.svg)](https://img.shields.io/github/tag/zhongwencool/ecron.svg) [![License](https://img.shields.io/hexpm/l/ecron.svg)](https://img.shields.io/hexpm/l/ecron.svg) [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ecron/)
+# Ecron [![GitHub Actions](https://github.com/zhongwencool/ecron/actions/workflows/ci.yml/badge.svg)](https://github.com/zhongwencool/ecron) [![CodeCov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron) [![Hex](https://img.shields.io/hexpm/v/ecron.svg?style=flat)](https://hex.pm/packages/ecron) [![Tag](https://img.shields.io/github/tag/zhongwencool/ecron.svg)](https://img.shields.io/github/tag/zhongwencool/ecron.svg) [![License](https://img.shields.io/hexpm/l/ecron.svg)](https://img.shields.io/hexpm/l/ecron.svg) [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ecron/)
 
-A lightweight and efficient cron-like job scheduling library for Erlang.
+> Resilient, lightweight, efficient, cron-like job scheduling library for Erlang/Elixir.
 
-# Overview
-Ecron is designed to manage scheduled jobs within a single gen_server process, similar to the standard library's [stdlib's timer](http://erlang.org/doc/man/timer.html). It uses an ordered_set ETS table to organize jobs by the next run time, ensuring efficient execution. Unlike traditional cron, Ecoron does not poll the system every second, which reduces message overhead and process usage.
+![EcronLogo](https://github.com/user-attachments/assets/ad3b493b-c1ef-4528-b7be-1e074c17b993)
 
-## Key Features
+Ecron supports both cron-style and interval-based job scheduling, focusing on resiliency, correctness, and lightweight with comprehensive testing via PropTest.
 
-- Supports both cron-like and interval-based scheduling.
-- Well-tested with [PropTest](https://github.com/proper-testing/proper) [![codecov](https://codecov.io/gh/zhongwencool/ecron/branch/master/graph/badge.svg?token=FI9WAQ6UG5)](https://codecov.io/gh/zhongwencool/ecron).
-- Utilizes gen_server timeout mechanism for precise timing.
-- Efficient process management, avoiding high memory usage.
+## Use Case
+Ecron's precise scheduling is perfect for:
 
-## Installation
+- **Security**: `0 3 * * 0` Rotate API keys and dynamic credentials automatically every Sunday at 3 AM
+- **Flash Sale**: `0 8 * * *` Launch flash sales with precision at 8 AM
+- **Analytics**: `0 9 * * 1` Sending comprehensive weekly reports every Monday at 9 AM
+- **Disk Protection**: `30 23 * * *` Compress and archive old logs at 23:30 daily
+- **Data Cleanup**: `0 1 1 * *` Pruning inactive users on the first day of each month
+- **Data Backup**: `0 2 * * *` Create reliable Mnesia database backups every day at 2 AM
+
+## Setup
 
 <!-- tabs-open -->
-
 ### Erlang
 
 ```erlang
   %% rebar.config
-  {deps, [ecron]}
+  {deps, [{ecron, "~> 1.1.0"}]}
 ```
 ### Elixir
 
 ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 1.0.1"}]
+    [{:ecron, "~> 1.1.0"}]
   end
 ```
-
 <!-- tabs-close -->
 
-## Basic Usage 
+## Configuration Usage 
 
-Configure Ecoron in your sys.config file with timezone and job specifications:
+<!-- tabs-open -->
+### Erlang
+
+Configure ecron in your `sys.config` file with job specifications:
 
 ```erlang
 %% sys.config
 [
-   {ecron, [      
-      {time_zone, local}, %% local or utc
+   {ecron, [
       {local_jobs, [
          %% {JobName, CrontabSpec, {M, F, A}}
-         %% {JobName, CrontabSpec, {M, F, A}, StartDateTime, EndDateTime}
+         %% {JobName, CrontabSpec, {M, F, A}, PropListOpts}
          %% CrontabSpec
             %%  1. "Minute Hour DayOfMonth Month DayOfWeek"
             %%  2. "Second Minute Hour DayOfMonth Month DayOfWeek"
             %%  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly
             %%  4. @every 1h2m3s
                   
-         {crontab_job, "*/15 * * * *", {io, format, ["Runs on 0, 15, 30, 45 minutes~n"]}},
-         {extend_crontab_job, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
-         {alphabet_job, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
-         {fixed_interval_job, "@every 30m", {io, format, ["Runs every 30 minutes"]}},
-         %% Runs every 15 minutes between {8,20,0} and {23, 59, 59}.
-         %% {limit_time_job, "*/15 * * * *", {io, format, ["Runs 0, 15, 30, 45 minutes after 8:20am~n"]}, {8,20,0}, unlimited}
-         %% parallel job         
-         {no_singleton_job, "@minutely", {timer, sleep, [61000]}, unlimited, unlimited, [{singleton, false}]}            
-     ]},
-     {global_jobs, []}, %% Global Spec has the same format as local_jobs.
-     {global_quorum_size, 1} %%  Minimum number of nodes which run ecron. Global_jobs only run on majority cluster when it > ClusterNode/2.
+         {basic, "*/15 * * * *", {io, format, ["Runs on 0, 15, 30, 45 minutes~n"]}},
+         {sec_in_spec, "0 0 1-6/2,18 * * *", {io, format, ["Runs on 1,3,6,18 o'clock:~n"]}},
+         {hourly, "@hourly", {io, format, ["Runs every(0-23) o'clock~n"]}},    
+         {interval, "@every 30m", {io, format, ["Runs every 30 minutes"]}},         
+         {limit_time, "*/15 * * * *", {io, format, ["Runs 0, 15, 30, 45 minutes after 8:20am~n"]}, [{start_time, {8,20,0}}, {end_time, {23, 59, 59}}]},
+         {limit_count, "@every 1m", {io, format, ["Runs 10 times"]}, [{max_count, 10}]},         
+         {limit_concurrency, "@minutely", {timer, sleep, [61000]}, [{singleton, true}]},         
+         {limit_runtime_ms, "@every 1m", {timer, sleep, [2000]}, [{max_runtime_ms, 1000}]}
+     ]}     
     }
 ].
 ```
+### Elixir
+Configure ecron in your `config.exs` file with job specifications:
+```elixir
+# config/config.exs
+config :ecron,  
+  local_jobs: [
+    # {job_name, crontab_spec, {module, function, args}}
+    # {job_name, crontab_spec, {module, function, args}, PropListOpts}
+    # CrontabSpec formats:
+    #  1. "Minute Hour DayOfMonth Month DayOfWeek"
+    #  2. "Second Minute Hour DayOfMonth Month DayOfWeek"
+    #  3. @yearly | @annually | @monthly | @weekly | @daily | @midnight | @hourly
+    #  4. @every 1h2m3s
+    
+    {:basic, "*/15 * * * *", {IO, :puts, ["Runs on 0, 15, 30, 45 minutes"]}},
+    {:sec_in_spec, "0 0 1-6/2,18 * * *", {IO, :puts, ["Runs on 1,3,6,18 o'clock:"]}},
+    {:hourly, "@hourly", {IO, :puts, ["Runs every(0-23) o'clock"]}},
+    {:interval, "@every 30m", {IO, :puts, ["Runs every 30 minutes"]}},    
+    {:limit_time, "*/15 * * * *", {IO, :puts, ["Runs 0, 15, 30, 45 minutes after 8:20am"]}, [start_time: {8,20,0}, end_time: {23, 59, 59}]},
+    {:limit_count, "@every 1m", {IO, :puts, ["Runs 10 times"]}, [max_count: 10]},
+    {:limit_concurrency, "@minutely", {Process, :sleep, [61000]}, [singleton: true]},
+    {:limit_runtime_ms, "@every 1m", {Process, :sleep, [2000]}, [max_runtime_ms: 1000]}
+  ] 
+```
+<!-- tabs-close -->
 
-* Default `time_zone` is `local`, the current datetime is [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0).
-* The current datetime is [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0) when `{time_zone, utc}`.
-* The job will be auto remove at `EndDateTime`, the default value of `EndDateTime` is `unlimited`. 
-* Default job is singleton, Each task cannot be executed concurrently. 
-* If the system clock suddenly alter a lot(such as sleep your laptop for two hours or modify system time manually),
-  it will skip the tasks which are supposed be running during the sudden lapse of time,
-  then recalculate the next running time by the latest system time.
-  You can also reload task manually by `ecron:reload().` when the system time is manually modified.
-* Global jobs depend on [global](http://erlang.org/doc/man/global.html), only allowed to be added statically, [check this for more detail](https://github.com/zhongwencool/ecron/blob/master/doc/global.md).
+* When a job reaches its `max_count` limit, it will be automatically removed. By default, `max_count` is set to `unlimited`.
+* By default, `singleton` is set to `false`, which means multiple instances of the same job can run concurrently. Set `singleton` to `true` to ensure only one instance runs at a time.
 
-## Supervisor Tree Usage
-Ecron can be integrated into your application's supervision tree for better control over its lifecycle:
+For all PropListOpts, refer to the documentation for [`ecron:create/4`](https://hexdocs.pm/ecron/ecron.html#create/4).
 
+## Runtime Usage
+Besides loading jobs from config files at startup, you can add jobs from your code.
+<!-- tabs-open -->
+### Erlang
 ```erlang
-%%config/sys.config
-[{your_app, [{crontab_jobs, [
-   {crontab_job, "*/15 * * * *", {stateless_cron, inspect, ["Runs on 0, 15, 30, 45 minutes"]}}
-  ]}
-].
+JobName = every_4am_job,
+MFA = {io, format, ["Run at 04:00 every day.\n"]},
+Options = #{max_runtime_ms => 1000},
+ecron:create(JobName, "0 4 * * *", MFA, Options).
+Statistic = ecron:statistic(JobName),
+ecron:delete(JobName),
+Statistic.
+```
+### Elixir
+```elixir
+job_name = :every_4am_job
+mfa = {IO, :puts, ["Run at 04:00 every day.\n"]}
+options = %{max_runtime_ms: 1000}
+{:ok, ^job_name} = :ecron.create(job_name, "0 4 * * *", mfa, options)
+statistic = :ecron.statistic(job_name)
+:ecron.delete(job_name)
+statistic
+```
+<!-- tabs-close -->
 
-%% src/your_app_sup.erl
--module(your_app_top_sup).
--behaviour(supervisor).
--export([init/1]).
+### Multi Register
+For most applications, the above two methods are enough. However, Ecron offers a more flexible way to manage job lifecycles.
 
-init(_Args) ->
-    Jobs = application:get_env(your_app, crontab_jobs, []),
-    SupFlags = #{
-        strategy => one_for_one,
-        intensity => 100,
-        period => 30
-    },
-    Name = 'uniqueName',
-    CronSpec = #{
-        id => Name,
-        start => {ecron, start_link, [Name, Jobs]},
+For example, when applications A and B need separate cron jobs, you can create a dedicated register for each. This ensures jobs are removed when their parent application stops.
+
+<!-- tabs-open -->
+### Erlang
+```erlang
+{ok, _}= ecron:start_link(YourRegister),
+ecron:create(YourRegister, JobName, Spec, MFA, Options),
+ecron:delete(YourRegister, JobName).
+```
+### Elixir
+```elixir
+{:ok, _} = :ecron.start_link(YourRegister)
+:ecron.create(YourRegister, JobName, Spec, MFA, Options)
+:ecron.delete(YourRegister, JobName)
+```
+<!-- tabs-close -->
+
+Alternatively, use a supervisor:
+
+<!-- tabs-open -->
+### Erlang
+[supervisor:child_spec/0](https://www.erlang.org/doc/apps/stdlib/supervisor.html#t:child_spec/0)
+```erlang
+YourRegister = your_ecron_register,
+Children = [
+  #{
+        id => YourRegister,
+        start => {ecron, start_link, [YourRegister]},
         restart => permanent,
         shutdown => 1000,
         type => worker
-    },
-    {ok, {SupFlags, [CronSpec]}}.
+    }
+]
+```
+### Elixir
+[supervisor:child_spec/1](https://hexdocs.pm/elixir/1.15.8/Supervisor.html#module-child_spec-1-function)
+```elixir
+children = [
+  worker(:ecron, [:your_ecron_register], restart: :permanent)
+]
 
 ```
-## Advanced Usage 
+<!-- tabs-close -->
 
-Ecron allows for advanced scheduling and manipulation of cron jobs:
+After setup, use [`ecron:create/4`](https://hexdocs.pm/ecron/ecron.html#create/4) and [`ecron:delete/2`](https://hexdocs.pm/ecron/ecron.html#delete/2) to manage your jobs.
+
+## Time Functions
+Ecron can manage recurring jobs. It also supports one-time tasks and time-based message delivery.
+
+[`ecron:send_after/3`](https://hexdocs.pm/ecron/ecron.html#send_after/2) Create a one-time timer that sends a message, just like [`erlang:send_after/3`](https://www.erlang.org/doc/apps/erts/erlang.html#send_after/3) but triggered with a crontab spec.
+<!-- tabs-open -->
+### Erlang
+```erlang
+ecron:send_after("*/4 * * * * *", self(), hello_world),
+receive Msg -> io:format("receive:~s~n", [Msg]) after 5000 -> timeout end.
+```
+
+### Elixir
+```elixir
+:ecron.send_after("*/4 * * * * *", self(), :hello_world)
+receive do msg -> IO.puts("receive: #{msg}") after 5000 -> :timeout end
+```
+<!-- tabs-close -->
+
+Sends a message to a process repeatedly based on a crontab schedule.
+
+[`ecron:send_interval/3`](https://hexdocs.pm/ecron/ecron.html#send_interval/3) Create a repeating timer that sends a message, just like [`timer:send_interval/3`](https://www.erlang.org/doc/apps/stdlib/timer.html#send_interval/3) but triggered with a crontab spec.
+<!-- tabs-open -->
+### Erlang
+```erlang
+ecron:send_interval("*/4 * * * * *", self(), hello_world),
+Loop = fun(Loop) ->
+  receive
+    Msg -> 
+      io:format("[~p] receive: ~s~n", [erlang:time(), Msg]),
+      Loop(Loop)
+  after
+    5000 -> timeout
+  end
+end,
+Loop(Loop).
+```
+
+### Elixir
+```elixir
+:ecron.send_interval("*/4 * * * * *", self(), :hello_world)
+loop = fn loop ->
+  receive do
+    msg -> 
+      IO.puts("[#{Time.utc_now()}] receive: #{msg}")
+      loop.(loop)
+  after
+    5000 -> :timeout
+  end
+end
+loop.(loop)
+```
+
+<!-- tabs-close -->
+## Time Zone
+<!-- tabs-open -->
+### Erlang
+
+Configure ecron in your `sys.config` file with timezone:
 
 ```erlang
-%% Same as: Spec = "0 * 0-5,18 * * 0-5", 
-Spec = #{second => [0], 
-       minute => '*',   
-       hour => [{0,5}, 18], %% same as [0,1,2,3,4,5,18]
-       month => '*',
-       day_of_month => '*',
-       day_of_week => [{0,5}]},
-CronMFA = {io, format, ["Runs on 0-5,18 o'clock between Sunday and Firday.~n"]},
-%% with name crontab  
-{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA),
-%% or
-{ok, _} = ecron:add(crontabUniqueName, "0 * 0-5,18 * * 0-5", CronMFA),   
-ok = ecron:delete(crontabuniqueName),
-%% crontab with startTime and endTime
-StartDateTime = {{2019,9,19},{0,0,0}},
-EndDateTime = {{2020,9,19},{0,0,0}},
-{ok, _} = ecron:add(crontabUniqueName, Spec, CronMFA, StartDateTime, EndDateTime),
-%% crontab without name
-{ok, JobName} = ecron:add(Spec, CronMFA, StartDateTime, EndDateTime), 
-ok = ecron:delete(crontabuniqueName),
-%% Runs every 120 second (fixed interval)
-EveryMFA = {io, format, ["Runs every 120 second.~n"]},
-{ok, _} = ecron:add(everyUniqueName, 120, EveryMFA),
+%% sys.config
+[
+   {ecron, [      
+      {time_zone, local} %% local or utc
+   ]}
+].
 ```
-
-You can find a collection of general practices in [Full Erlang Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_erlang) and [Full Elixir Examples](https://github.com/zhongwencool/ecron/blob/master/examples/titan_elixir).
-
-## Debug Support
-
-Ecron provides functions to assist with debugging:
-
-````erlang
-1> ecron:deactivate(CrontabName).
-ok
-
-2> ecron:activate(CrontabName).
-ok
-
-3> ecron:statistic(CrontabName).
-{ok,
-  #{crontab =>
-      #{day_of_month => '*',
-       day_of_week => [{1,5}],hour => [1,13],
-       minute => [0],month => '*',second => [0]},
-       start_time => unlimited,end_time => unlimited,
-       failed => 0,mfa => {io,format,["ddd"]},
-       name => test,status => activate,type => cron,
-       ok => 1,results => [ok],run_microsecond => [12],       
-       opts => [{singleton,true}], node => 'test@127.0.0.1',
-       next =>
-          ["2019-09-27T01:00:00+08:00","2019-09-27T13:00:00+08:00",
-           "2019-09-30T01:00:00+08:00","2019-09-30T13:00:00+08:00",
-           "2019-10-01T01:00:00+08:00","2019-10-01T13:00:00+08:00",
-           "2019-10-02T01:00:00+08:00","2019-10-02T13:00:00+08:00",
-           [...]|...]      
-      }
-}
-
-4> ecron:parse_spec("0 0 1,13 * * 1-5", 5).
-{ok,
-#{crontab =>
-      #{day_of_month => '*',
-        day_of_week => [{1,5}],
-        hour => [1,13],
-        minute => [0],
-        month => '*',
-        second => [0]},
-  next =>
-      ["2019-09-16T13:00:00+08:00","2019-09-17T01:00:00+08:00",
-       "2019-09-17T13:00:00+08:00","2019-09-18T01:00:00+08:00",
-       "2019-09-18T13:00:00+08:00"],
-  type => cron}
-}
-````
-## Implementation
-
-Ecron uses an efficient approach to manage job execution times and intervals:
-
-1. The top supervisor `ecron_sup` starts firstly.
-2. then `ecron_sup` starts a child `ecron`(gen_server worker).
-3. `ecron` will look for configuration `{local_jobs, Jobs}` at initialization.
-4. For each crontab job found, determine the next time in the future that each command must run.
-5. Place those commands on the ordered_set ets with their `{NextCorrespondingTime, Name}` to run as key.
-6. Enter `ecron`'s main loop:
-    * Examine the task entry at the head of the ets, compute how far in the future it must run.
-    * Sleep for that period of time by gen_server timeout feature.
-    * On awakening and after verifying the correct time, execute the task at the head of the ets (spawn in background).
-    * Delete old key in ets.
-    * Determine the next time in the future to run this command and place it back on the ets at that time value.
-    
-Additionally, you can use `ecron:statistic(Name)` to see the job's latest 16 results and execute times.
-```
-    ecron_sup------->ecron
-                      |
-                   |------| ets:new(timer, [ordered_set])
-                   | init | ets:insert(timer, [{{NextTriggeredTime,Name}...])
-                   |------|
-             |------->|
-             |     |------| {NextTriggeredTime,Name} = OldKey = ets:first(timer)
-             |     |      | sleep(NextTriggeredTime - current_time())
-             |     | loop | spawn a process to execute MFA
-             |     |      | ets:delete(timer, OldKey)
-             |     |------| ets:insert(timer, {{NewTriggeredTime,Name}...])
-             |<-------|
-```
-
-[Check this for global_jobs workflow](global.html#Implementation).       
-
-## CRON Expression Guide
-
-### Basic Format
-
-A cron expression consists of 5-6 fields representing time units:
+### Elixir
+```elixir
+# config/config.exs
+config :ecron,
+  time_zone: :local  # :local or :utc
 
 ```
-# ┌────────────── second (optional)
-# │ ┌──────────── minute
-# │ │ ┌────────── hour
-# │ │ │ ┌──────── day of month
-# │ │ │ │ ┌────── month
-# │ │ │ │ │ ┌──── day of week
-# │ │ │ │ │ │
-# │ │ │ │ │ │
-# 0 * * * * *
-```
+<!-- tabs-close -->
+* When `time_zone` is set to `local` (default), ecron uses [calendar:local_time()](http://erlang.org/doc/man/calendar.html#local_time-0) to get the current datetime in your system's timezone
+* When `time_zone` is set to `utc`, ecron uses [calendar:universal_time()](http://erlang.org/doc/man/calendar.html#universal_time-0) to get the current datetime in UTC timezone
 
-### Field Values
+## Troubleshooting
 
-Field | Required | Values | Special Characters
-Second | No | 0-59 | `* / , -`
-Minute | Yes | 0-59 | `* / , -`
-Hour | Yes | 0-23 | `* / , -`
-Day of Month | Yes | 1-31 | `* / , -`
-Month | Yes | 1-12 or JAN-DEC | `* / , -`
-Day of Week | Yes | 0-6 or SUN-SAT | `* / , -`
+Ecron provides functions to assist with debugging at runtime:
+[`ecron:statistic/x ecron:parse_spec/2`](https://hexdocs.pm/ecron/ecron.html#debugging-testing)
 
-> **Note**: Month and Day-of-week values are case-insensitive.
+## Telemetry
+Ecron uses [Telemetry](https://github.com/beam-telemetry/telemetry) for instrumentation and logging.
+Telemetry is a metrics and instrumentation library for Erlang and Elixir applications 
+that is based on publishing events through a common interface and attaching handlers to handle those events. 
+For more information about the library itself, see its [README](https://github.com/beam-telemetry/telemetry).
 
-### Special Characters
+Ecron logs all events by default. 
+### Events
+|  Event      | measurements map key                       | metadata map key | log level
+| success     |run_microsecond,run_result,action_at        | name,mfa         | notice
+| activate    |action_at                                   | name,mfa         | notice
+| deactivate  |action_at                                   | name             | notice
+| delete      |action_at                                   | name             | notice
+| crashed     |run_microsecond,run_result,action_at        | name,mfa         | error
+| skipped     |job_last_pid,reason,action_at               | name,mfa         | error
+| aborted     |run_microsecond,action_at                   | name,mfa         | error
+| global,up   |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
+| global,down |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
 
-- `*` - Any value
-- `/` - Step values (e.g., `*/15` - every 15 units)
-- `,` - Value list (e.g., `1,3,5`)
-- `-` - Range (e.g., `1-5`)
+For all failed events, refer to the documentation for [`ecron:statistic/2`](https://hexdocs.pm/ecron/ecron.html#statistic/2).
 
-### Predefined Schedules
-
-Expression | Description | Equivalent
-`@yearly` | Once a year (midnight, Jan 1) | `0 0 0 1 1 *`
-`@monthly` | Once a month (midnight, first day) | `0 0 0 1 * *`
-`@weekly` | Once a week (midnight, Sunday) | `0 0 0 * * 0`
-`@daily` | Once a day (midnight) | `0 0 0 * * *`
-`@hourly` | Once an hour | `0 0 * * * *`
-`@minutely` | Once a minute | `0 * * * * *`
-
-### Fixed Intervals
-
-For simpler scheduling needs, use `@every` with a duration:
-
+You can enable or disable logging via `log` configuration.
+<!-- tabs-open -->
+### Erlang
 ```erlang
-% Run every 30 minutes
-"@every 30m"
-
-% Run every 1 hour and 30 minutes
-"@every 1h30m"
+  %% sys.config
+  [
+   {ecron, [
+    %% none | all | alert | error | notice 
+      {log_level, all}
+   ]}
+].
 ```
+### Elixir
+```elixir
+# config/config.exs
+config :ecron,
+  # :none | :all | :alert | :error
+  log: :all
+```
+<!-- tabs-close -->
+- **all**: Captures all events.
+- **none**: Captures no events.
+- **alert**: Captures global up/down events.
+- **error**: Captures crashed, skipped, aborted, and global up/down events.
 
-Duration units: `d`(days), `h`(hours), `m`(minutes), `s`(seconds)
+> ### How? {: .info}
+> Use [logger:set_module_level(ecron_telemetry_logger, Log)](https://www.erlang.org/doc/apps/kernel/logger.html#set_module_level/2) to override the primary log level of Logger for log events originating from the ecron_telemetry_logger module.
+> This means that even if you set the primary log level to error, but the module log level is set to all, all ecron logs will be captured.
+ 
+### Writing your own handler
+If you want custom logging control, you can create your own event handler. 
+See [`src/ecron_telemetry_logger.erl`](https://github.com/zhongwencool/ecron/blob/main/src/ecron_telemetry_logger.erl) as a reference implementation.
 
-### Error Handling
 
-- Failed jobs don't affect other jobs
-- Execution results and timing are stored (last 16 runs)
-- Jobs can be configured as singleton or parallel
-- System time changes are handled gracefully
-
-## Best Practices
-
-1. **Job Names**
-   - Use descriptive, unique names
-   - Consider adding prefixes for different job types
-
-2. **Time Windows**
-   - Use start/end times for temporary jobs
-   - Consider time zone implications
-
-3. **Error Handling**
-   - Implement proper error handling in job functions
-   - Monitor job execution through telemetry
-
-4. **Resource Management**
-   - Group related jobs under same supervisor
-   - Use `singleton: false` only when needed
-
-5. **Testing**
-   - Validate cron expressions before deployment
-   - Test jobs with different time scenarios
-
-## Test
-
-This command will run property-based tests, common tests, and generate a coverage report with verbose output.
-
+## Contributing
+To run property-based tests, common tests, and generate a coverage report with verbose output.
 ```shell
   $ rebar3 do proper -c, ct -c, cover -v
 ```
+It takes about 10-15 minutes.
+
+## License
+Ecron is released under the Apache-2.0 license. See the [license file](LICENSE).
+
+
+

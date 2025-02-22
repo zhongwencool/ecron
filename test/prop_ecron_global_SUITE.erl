@@ -1,13 +1,9 @@
 -module(prop_ecron_global_SUITE).
 -include_lib("ecron/include/ecron.hrl").
 
-%%% Common Test includes
--include_lib("common_test/include/ct.hrl").
--include_lib("stdlib/include/assert.hrl").
-
 -export([all/0, suite/0, groups/0, init_per_suite/1, end_per_suite/1]).
--compile(export_all).
-
+-export([basic/1, quorum/1, quorum_in_majority/1, transfer/1, error_config/1, duplicate_config/1]).
+-export([set_app_env/1]).
 -define(Master, 'master@127.0.0.1').
 -define(Slave1, 'slave1@127.0.0.1').
 -define(Slave2, 'slave2@127.0.0.1').
