@@ -1,5 +1,7 @@
 # Implementation
 
+# Implementation
+
 Ecron uses an efficient approach to manage job execution times and intervals:
 
 1. The top supervisor `ecron_sup` starts first.
@@ -15,18 +17,21 @@ Ecron uses an efficient approach to manage job execution times and intervals:
     * Determine the next time in the future to run this command and place it back in the ETS at that time value.
     
 Additionally, you can use `ecron:statistic(Name)` to see the job's latest 16 results and execution times.
-```
-    ecron_sup-------> ecron (registered as `ecron_local`)
-                       |
-                    |------| ets:new(timer, [ordered_set])
-                    | init | ets:insert(timer, [{{NextTriggeredTime,Name}...])
-                    |------|
-              |------->|
-              |     |------| {NextTriggeredTime,Name} = OldKey = ets:first(timer)
-              |     |      | sleep(NextTriggeredTime - current_time())
-              |     | loop | spawn a process to execute MFA
-              |     |      | ets:delete(timer, OldKey)
-              |     |------| ets:insert(timer, {{NewTriggeredTime,Name}...])
-              |<-------|
-```
 
+```mermaid
+flowchart TD
+    A[ecron_sup] -->|starts| B[ecron]
+    
+    subgraph initialization
+    B -->|init| C[ets:new - ordered_set]
+    C -->|read config| D[local_jobs]
+    D -->|calculate times| E["ets:insert with {NextTriggeredTime, Name}"]
+    end
+    
+    subgraph main_loop
+    E -->|loop| F[Get first entry from ETS]
+    F -->|sleep until time| G["Execute(spawn) job in background"]
+    G -->|delete old key| H[Calculate new time]
+    H -->|"ets:insert new {NextTriggeredTime, Name}"| E
+    end
+```

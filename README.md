@@ -138,8 +138,8 @@ ecron:delete(YourRegister, JobName).
 ### Elixir
 ```elixir
 {:ok, _} = :ecron.start_link(YourRegister)
-:ecron.create(YourRegister, JobName, Spec, MFA, Options)
-:ecron.delete(YourRegister, JobName)
+:ecron.create(YourRegister, job_name, spec, mfa, options)
+:ecron.delete(YourRegister, job_name)
 ```
 <!-- tabs-close -->
 
@@ -149,7 +149,7 @@ Alternatively, use a supervisor:
 ### Erlang
 [supervisor:child_spec/0](https://www.erlang.org/doc/apps/stdlib/supervisor.html#t:child_spec/0)
 ```erlang
-YourRegister = your_ecron_register,
+YourRegister = your_register,
 Children = [
   #{
         id => YourRegister,
@@ -164,7 +164,7 @@ Children = [
 [supervisor:child_spec/1](https://hexdocs.pm/elixir/1.15.8/Supervisor.html#module-child_spec-1-function)
 ```elixir
 children = [
-  worker(:ecron, [:your_ecron_register], restart: :permanent)
+  worker(:ecron, [YourRegister], restart: :permanent)
 ]
 
 ```
@@ -263,16 +263,18 @@ For more information about the library itself, see its [README](https://github.c
 
 Ecron logs all events by default. 
 ### Events
-|  Event      | measurements map key                       | metadata map key | log level
-| success     |run_microsecond,run_result,action_at        | name,mfa         | notice
-| activate    |action_at                                   | name,mfa         | notice
-| deactivate  |action_at                                   | name             | notice
-| delete      |action_at                                   | name             | notice
-| crashed     |run_microsecond,run_result,action_at        | name,mfa         | error
-| skipped     |job_last_pid,reason,action_at               | name,mfa         | error
-| aborted     |run_microsecond,action_at                   | name,mfa         | error
-| global,up   |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
-| global,down |quorum_size,good_nodes,bad_nodes,action_at  | self(node)       | alert
+
+| Event | Measurements Map Keys | Metadata Map Keys | Log Level |
+|-------|----------------------|------------------|-----------|
+| `success` | `run_microsecond`, `run_result`, `action_at` | `name`, `mfa` | notice |
+| `activate` | `action_at` | `name`, `mfa` | notice |
+| `deactivate` | `action_at` | `name` | notice |
+| `delete` | `action_at` | `name` | notice |
+| `crashed` | `run_microsecond`, `run_result`, `action_at` | `name`, `mfa` | error |
+| `skipped` | `job_last_pid`, `reason`, `action_at` | `name`, `mfa` | error |
+| `aborted` | `run_microsecond`, `action_at` | `name`, `mfa` | error |
+| `global,up` | `quorum_size`, `good_nodes`, `bad_nodes`, `action_at` | `self(node)` | alert |
+| `global,down` | `quorum_size`, `good_nodes`, `bad_nodes`, `action_at` | `self(node)` | alert |
 
 For all failed events, refer to the documentation for [`ecron:statistic/2`](https://hexdocs.pm/ecron/ecron.html#statistic/2).
 
@@ -293,7 +295,7 @@ You can enable or disable logging via `log` configuration.
 # config/config.exs
 config :ecron,
   # :none | :all | :alert | :error
-  log: :all
+  log_level: :all
 ```
 <!-- tabs-close -->
 - **all**: Captures all events.

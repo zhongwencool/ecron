@@ -96,21 +96,24 @@ Run on every node if brain split:
 3. `ecron_sup` would start_link `ecron_monitor` worker (gen_server) if `global_jobs` is not empty.
 4. `ecron_monitor` subscribes to node's up/down messages by [net_kernel:monitor_nodes(true)](http://erlang.org/doc/man/net_kernel.html#monitor_nodes-1) when it initializes.
 5. Enter `ecron_monitor` main loop:
-    * Checking if there are enough `ecron` processes in the cluster (`global_quorum_size`).
-    * Trying to terminate the global_job manager process when the cluster's `ecron` number is less than `global_quorum_size`.
-    * Otherwise, trying to start a global_job manager process. This gen_server registers by [global:register_name/2](http://erlang.org/doc/man/global.html#register_name-2).
-    * All the nodes are rushing to register this global jobs manager process; only one node will succeed, other nodes' `ecron_monitor` would link to this process if the process already exists.
-    * The `ecron_monitor` should receive a notification when a node goes down/up or the global_job manager has terminated.
-    * Go to step 5 again when notified.
+   * Checking if there are enough `ecron` processes in the cluster (`global_quorum_size`).
+   * Trying to terminate the global_job manager process when the cluster's `ecron` number is less than `global_quorum_size`.
+   * Otherwise, trying to start a global_job manager process. This gen_server registers by [global:register_name/2](http://erlang.org/doc/man/global.html#register_name-2).
+   * All the nodes are rushing to register this global jobs manager process; only one node will succeed, other nodes' `ecron_monitor` would link to this process if the process already exists.
+   * The `ecron_monitor` should receive a notification when a node goes down/up or the global_job manager has terminated.
+   * Go to step 5 again when notified.
 
+```mermaid
+   graph TD
+   NodeA[NodeA/supervisor] --> MonitorA[monitorA]
+   NodeB[NodeB/supervisor] --> MonitorB[monitorB]
+   NodeC[NodeC/supervisor] --> MonitorC[monitorC]
+   MonitorA -->|"win|>spawn"| GlobalJob
+   MonitorA -.-|link| GlobalJob   
+   MonitorB -.-|link| GlobalJob
+   MonitorC -.-|link| GlobalJob
+   
+   classDef winner fill:#90EE90;
+   class NodeA,MonitorA,GlobalJob winner;
 ```
-     NodeA             NodeB             NodeC
-   supervisor        supervisor        supervisor
-       |                |     |            |
-    monitor          monitor  |          monitor
-         \              |     |            /
-          \           [link]  |           /
-           \            |     |          /
-           [link]-----GlobalJob-----[link]
-``` 
-NodeB has won the race and spawned the global manager process, other nodes' `ecron_monitor` only link to this manager.
+NodeA has won the race and spawned the global manager process, other nodes' `ecron_monitor` only link to this manager.

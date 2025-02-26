@@ -993,6 +993,7 @@ predict_datetime(Job, Num, Start, End) ->
 ?DOC("""
 Create a new registry.
 Same as [`start_link(Register, [])`](#start_link/2).
+
 Parameters:
 * `Register` - Process name where job is registered
 

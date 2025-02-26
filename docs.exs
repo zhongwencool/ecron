@@ -15,6 +15,16 @@
   source_url: "https://github.com/zhongwencool/ecron",
   homepage_url: "https://github.com/zhongwencool/ecron",
   with_mermaid: true,
+  before_closing_body_tag: fn
+    :html ->
+      """
+      <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+      <script>mermaid.initialize({startOnLoad: true})</script>
+      """
+
+    _ ->
+      ""
+  end,
   api_reference: false,
   warnings_as_errors: true,
   groups_for_docs: [
