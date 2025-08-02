@@ -17,12 +17,12 @@
     crashed => error
 }).
 %% API
--export([attach/0, detach/0]).
+-export([attach/0, detach/0, handle_event/4]).
 
 attach() ->
     Level = application:get_env(ecron, log_level, all),
     logger:set_module_level([?MODULE], Level),
-    Function = fun handle_event/4,
+    Function = fun ?MODULE:handle_event/4,
     Config = undefined,
     telemetry:attach_many(?MODULE, ?Events, Function, Config).
 
