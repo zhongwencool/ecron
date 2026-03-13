@@ -23,14 +23,14 @@ Ecron's precise scheduling is perfect for:
 
 ```erlang
   %% rebar.config
-  {deps, [{ecron, "~> 1.1.0"}]}
+  {deps, [{ecron, "~> 1.1.1"}]}
 ```
 ### Elixir
 
 ```elixir
   # mix.exs
   def deps do
-    [{:ecron, "~> 1.1.0"}]
+    [{:ecron, "~> 1.1.1"}]
   end
 ```
 <!-- tabs-close -->
